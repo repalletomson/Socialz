@@ -1,0 +1,96 @@
+{
+  "expo": {
+    "name": "SocialZ",
+    "slug": "vips",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/SOCIALZ.jpeg",
+    "scheme": "socialz",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
+      },
+      "bundleIdentifier": "com.r.tomson.socialz"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#000000"
+      },
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "android.permission.NOTIFICATIONS",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "softwareKeyboardLayoutMode": "pan",
+      "package": "com.student.app"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/SOCIALZ.jpeg"
+    },
+    "splash": {
+      "image": "./assets/images/SOCIALZ.jpeg",
+      "resizeMode": "cover",
+      "backgroundColor": "#000000"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/SOCIALZ.jpeg",
+          "imageResizeMode": "cover",
+          "backgroundColor": "#000000",
+          "dark": {
+            "image": "./assets/images/SOCIALZ.jpeg",
+            "imageResizeMode": "cover",
+            "backgroundColor": "#000000"
+          }
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you share them with your friends.",
+          "cameraPermission": "The app accesses your camera to let you share photos with your friends."
+        }
+      ],
+      "expo-font",
+      "expo-secure-store",
+      "@react-native-google-signin/google-signin",
+      "@react-native-firebase/app"
+    ],
+    "developmentClient": {
+      "silentLaunch": true
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "notification": {
+      "icon": "./assets/images/icon.png",
+      "color": "#8B5CF6"
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "f156a284-7bbc-4353-bcde-53739d132a3e"
+      }
+    },
+    "owner": "r.tomson"
+  }
+}

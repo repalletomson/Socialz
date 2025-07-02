@@ -1,0 +1,464 @@
+90:3A:5D:90:C6:0C:A6:DB:C8:C5:DA:09:4C:1E:8F:9F:78:F9:FB:40
+90:3A:5D:90:C6:0C:A6:DB:C8:C5:DA:09:4C:1E:8F:9F:78:F9:FB:40
+
+
+
+B8:43:66:7E:A5:B4:DE:7C:1F:DD:71:E3:41:9B:FC:E4:30:82:CF:20
+
+5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25
+
+588247216245-arhbtn5e1n1cbpvdpv6a3n5j3njjbju9.apps.googleusercontent.com
+
+588247216245-jp3sgfdsk2qkpmkee8on6l5tchf0dv3q.apps.googleusercontent.com
+
+1076535842721-f78nis65bj3uon79pg4vajj0rvm1gc99.apps.googleusercontent.com
+
+
+
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  View,
+  Text,
+  FlatList,
+  TextInput,
+  TouchableOpacity,
+  Image,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Modal,
+  SafeAreaView,
+} from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import {
+  collection,
+  query,
+  orderBy,
+  onSnapshot,
+  addDoc,
+  deleteDoc,
+  serverTimestamp,
+  doc,
+  updateDoc,
+} from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, auth, storage } from '../../config/firebaseConfig';
+import { blockUser, unblockUser, checkBlockStatus } from '../(apis)/chat';
+import { useLocalSearchParams, router } from 'expo-router';
+
+// Modals as separate components for better organization
+const ImageOptionsModal = ({ visible, onClose, onGallerySelect, onCameraSelect }) => (
+  <Modal visible={visible} transparent animationType="slide">
+    <TouchableOpacity 
+      activeOpacity={1} 
+      onPress={onClose} 
+      className="flex-1 bg-black/50"
+    >
+      <View className="mt-auto bg-white rounded-t-3xl">
+        <View className="p-6">
+          <TouchableOpacity 
+            onPress={onGallerySelect} 
+            className="p-4 bg-purple-50 rounded-xl mb-4"
+          >
+            <Text className="text-purple-600 text-center font-medium">
+              Choose from Gallery
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            onPress={onCameraSelect} 
+            className="p-4 bg-purple-50 rounded-xl"
+          >
+            <Text className="text-purple-600 text-center font-medium">
+              Take Photo
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            onPress={onClose} 
+            className="p-4 mt-4 bg-gray-100 rounded-xl"
+          >
+            <Text className="text-gray-800 text-center font-medium">Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </TouchableOpacity>
+  </Modal>
+);
+
+const MessageInput = ({ chatId, recipientId, isBlocked, onSendMessage }) => {
+  const [message, setMessage] = useState('');
+  const [imageOptionsVisible, setImageOptionsVisible] = useState(false);
+  const [sending, setSending] = useState(false);
+
+  const handleSendMessage = async () => {
+    if (sending || message.trim() === '') return;
+    
+    try {
+      setSending(true);
+      const messageData = {
+        text: message.trim(),
+        sender: auth.currentUser.uid,
+        timestamp: serverTimestamp(),
+        type: 'text',
+        reactions: {},
+        status: 'sent',
+      };
+
+      const docRef = await addDoc(
+        collection(db, 'chats', chatId, 'messages'), 
+        messageData
+      );
+      
+      await updateDoc(doc(db, 'chats', chatId), {
+        lastMessage: message.trim(),
+        lastMessageTime: serverTimestamp(),
+      });
+
+      setMessage('');
+      onSendMessage?.(docRef.id);
+    } catch (error) {
+      console.error('Send message error:', error);
+      Alert.alert('Error', 'Failed to send message');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleImageUpload = async (type) => {
+    try {
+      const { status } = await (type === 'gallery' 
+        ? ImagePicker.requestMediaLibraryPermissionsAsync()
+        : ImagePicker.requestCameraPermissionsAsync());
+
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Required', 
+          `Please allow access to your ${type === 'gallery' ? 'gallery' : 'camera'}`
+        );
+        return;
+      }
+
+      const result = await (type === 'gallery'
+        ? ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            quality: 0.8,
+          })
+        : ImagePicker.launchCameraAsync({
+            allowsEditing: true,
+            quality: 0.8,
+          }));
+
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        setSending(true);
+        const uri = result.assets[0].uri;
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        const storageRef = ref(storage, `chats/${chatId}/${Date.now()}`);
+        const snapshot = await uploadBytes(storageRef, blob);
+        const downloadURL = await getDownloadURL(snapshot.ref);
+
+        await addDoc(collection(db, 'chats', chatId, 'messages'), {
+          type: 'image',
+          fileUrl: downloadURL,
+          sender: auth.currentUser.uid,
+          timestamp: serverTimestamp(),
+          reactions: {},
+          status: 'sent',
+        });
+      }
+    } catch (error) {
+      console.error('Image upload error:', error);
+      Alert.alert('Error', 'Failed to upload image');
+    } finally {
+      setImageOptionsVisible(false);
+      setSending(false);
+    }
+  };
+
+  if (isBlocked) {
+    return (
+      <View className="p-4 bg-red-50">
+        <Text className="text-red-500 text-center">
+          You cannot send messages to this user
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
+      <SafeAreaView className="border-t border-gray-200">
+        <View className="bg-white p-2 flex-row items-center">
+          <TouchableOpacity 
+            onPress={() => setImageOptionsVisible(true)} 
+            className="p-2"
+            disabled={sending}
+          >
+            <MaterialIcons 
+              name="image" 
+              size={24} 
+              color={sending ? '#CBD5E0' : '#8A4FFF'} 
+            />
+          </TouchableOpacity>
+
+          <TextInput
+            value={message}
+            onChangeText={setMessage}
+            placeholder="Type a message..."
+            multiline
+            maxLength={1000}
+            className="flex-1 bg-gray-100 rounded-2xl px-4 py-2 mr-2 max-h-24"
+            editable={!sending}
+          />
+
+          <TouchableOpacity
+            onPress={handleSendMessage}
+            disabled={sending || message.trim() === ''}
+            className={`p-2 rounded-full ${
+              sending || message.trim() === '' 
+                ? 'bg-gray-300' 
+                : 'bg-purple-500'
+            }`}
+          >
+            <MaterialIcons 
+              name="send" 
+              size={24} 
+              color="white" 
+            />
+          </TouchableOpacity>
+        </View>
+
+        <ImageOptionsModal
+          visible={imageOptionsVisible}
+          onClose={() => setImageOptionsVisible(false)}
+          onGallerySelect={() => handleImageUpload('gallery')}
+          onCameraSelect={() => handleImageUpload('camera')}
+        />
+      </SafeAreaView>
+    </KeyboardAvoidingView>
+  );
+};
+
+// Main ChatRoom Component
+export default function ChatRoom() {
+  const { chatId, recipientId } = useLocalSearchParams();
+  const [messages, setMessages] = useState([]);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [recipient, setRecipient] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  const flatListRef = useRef(null);
+
+  useEffect(() => {
+    let isActive = true;
+    let messagesUnsubscribe;
+    let recipientUnsubscribe;
+
+    const initialize = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Check block status
+        const blockStatus = await checkBlockStatus(recipientId);
+        if (isActive) setIsBlocked(blockStatus);
+
+        // Setup message listener
+        const messagesQuery = query(
+          collection(db, 'chats', chatId, 'messages'),
+          orderBy('timestamp', 'desc')
+        );
+
+        messagesUnsubscribe = onSnapshot(
+          messagesQuery,
+          (snapshot) => {
+            if (!isActive) return;
+            const fetchedMessages = snapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data(),
+            }));
+            setMessages(fetchedMessages);
+          },
+          (error) => {
+            console.error('Messages listener error:', error);
+            if (isActive) setError('Failed to load messages');
+          }
+        );
+
+        // Setup recipient listener
+        const recipientRef = doc(db, 'users', recipientId);
+        recipientUnsubscribe = onSnapshot(
+          recipientRef,
+          (snapshot) => {
+            if (!isActive) return;
+            setRecipient(snapshot.exists() ? snapshot.data() : null);
+          },
+          (error) => {
+            console.error('Recipient listener error:', error);
+            if (isActive) setError('Failed to load recipient info');
+          }
+        );
+      } catch (error) {
+        console.error('Chat initialization error:', error);
+        if (isActive) setError('Failed to initialize chat');
+      } finally {
+        if (isActive) setLoading(false);
+      }
+    };
+
+    initialize();
+
+    return () => {
+      isActive = false;
+      if (messagesUnsubscribe) messagesUnsubscribe();
+      if (recipientUnsubscribe) recipientUnsubscribe();
+    };
+  }, [chatId, recipientId]);
+
+  const handleBlock = async () => {
+    try {
+      await blockUser(recipientId);
+      setIsBlocked(true);
+      Alert.alert('Success', 'User has been blocked');
+    } catch (error) {
+      console.error('Block error:', error);
+      Alert.alert('Error', 'Failed to block user');
+    }
+  };
+
+  const handleUnblock = async () => {
+    try {
+      await unblockUser(recipientId);
+      setIsBlocked(false);
+      Alert.alert('Success', 'User has been unblocked');
+    } catch (error) {
+      console.error('Unblock error:', error);
+      Alert.alert('Error', 'Failed to unblock user');
+    }
+  };
+
+  const renderMessage = useCallback(({ item }) => {
+    const isOwnMessage = item.sender === auth.currentUser?.uid;
+    
+    return (
+      <View 
+        className={`p-3 rounded-xl m-2 max-w-[80%] ${
+          isOwnMessage ? 'self-end' : 'self-start'
+        }`}
+        style={{
+          backgroundColor: isOwnMessage ? '#F3E8FF' : '#F3F4F6',
+        }}
+      >
+        {item.type === 'image' ? (
+          <Image 
+            source={{ uri: item.fileUrl }} 
+            className="w-48 h-48 rounded-lg"
+            resizeMode="cover"
+          />
+        ) : (
+          <Text className="text-black">{item.text}</Text>
+        )}
+        
+        {item.timestamp && (
+          <Text className="text-xs text-gray-500 mt-1">
+            {new Date(item.timestamp.seconds * 1000).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </Text>
+        )}
+      </View>
+    );
+  }, []);
+
+  if (loading) {
+    return (
+      <View className="flex-1 justify-center items-center">
+        <Text>Loading...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View className="flex-1 justify-center items-center p-4">
+        <Text className="text-red-500 text-center mb-4">{error}</Text>
+        <TouchableOpacity 
+          onPress={() => router.back()}
+          className="bg-purple-500 px-6 py-3 rounded-xl"
+        >
+          <Text className="text-white font-medium">Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return (
+    <SafeAreaView className="flex-1 bg-white">
+      <View className="bg-purple-500 p-4 flex-row items-center">
+        <TouchableOpacity 
+          onPress={() => router.back()}
+          className="p-2"
+        >
+          <MaterialIcons name="arrow-back" size={24} color="white" />
+        </TouchableOpacity>
+
+        <View className="flex-1 flex-row items-center ml-2">
+          <Image
+            source={
+              recipient?.profileUrl 
+                ? { uri: recipient.profileUrl }
+                : require('../../assets/images/Default.webp')
+            }
+            className="w-10 h-10 rounded-full"
+            resizeMode="cover"
+          />
+          <Text className="text-white text-lg ml-4">
+            {recipient?.username || 'Unknown User'}
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          onPress={isBlocked ? handleUnblock : handleBlock}
+          className="ml-auto p-2"
+        >
+          <MaterialIcons 
+            name={isBlocked ? 'lock-open' : 'block'} 
+            size={24} 
+            color="white" 
+          />
+        </TouchableOpacity>
+      </View>
+
+      <FlatList
+        ref={flatListRef}
+        data={messages}
+        renderItem={renderMessage}
+        keyExtractor={item => item.id}
+        inverted
+        className="flex-1"
+        contentContainerStyle={{ paddingVertical: 16 }}
+        initialNumToRender={15}
+        maxToRenderPerBatch={10}
+        windowSize={10}
+      />
+
+      <MessageInput 
+        chatId={chatId}
+        recipientId={recipientId}
+        isBlocked={isBlocked}
+      />
+    </SafeAreaView>
+  );
+}
+
+
+
+

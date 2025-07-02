@@ -1,0 +1,392 @@
+flowchart TD
+    A[User A Opens App] --> B[Authentication]
+    B --> C[Generate Key Pair]
+    C --> D[Store Public Key in Firebase]
+    C --> E[Store Private Key in Local Storage]
+    
+    F[User B Opens App] --> G[Authentication]
+    G --> H[Generate Key Pair]
+    H --> I[Store Public Key in Firebase]
+    H --> J[Store Private Key in Local Storage]
+    
+    K[User A sends message] --> L{Encryption Process}
+    L --> M[Get User B's Public Key]
+    M --> N[Encrypt Message]
+    N --> O[Store in Firebase]
+    
+    P[User B receives message] --> Q{Decryption Process}
+    Q --> R[Get Private Key from Storage]
+    R --> S[Decrypt Message]
+    S --> T[Display Message]
+
+    style L fill:#f96,stroke:#333
+    style Q fill:#f96,stroke:#333
+// import React, { useState, useEffect, useRef } from 'react';
+// import {
+//   View,
+//   Text,
+//   FlatList,
+//   TextInput,
+//   TouchableOpacity,
+//   Image,
+//   Alert,
+//   ActivityIndicator,
+//   KeyboardAvoidingView,
+//   Platform,
+// } from 'react-native';
+// import {
+//   collection,
+//   query,
+//   where,
+//   orderBy,
+//   onSnapshot,
+//   addDoc,
+//   updateDoc,
+//   doc,
+//   deleteDoc,
+//   serverTimestamp,
+//   getDoc,
+//   setDoc,
+// } from 'firebase/firestore';
+// import {
+//   ref,
+//   uploadBytes,
+//   getDownloadURL,
+// } from 'firebase/storage';
+// import { db, auth, storage } from '../../config/firebaseConfig';
+// import * as ImagePicker from 'expo-image-picker';
+// import { MaterialIcons } from '@expo/vector-icons';
+// import { useLocalSearchParams, useRouter } from 'expo-router';
+// import { generateSecureKey, storeSecureKey, retrieveSecureKey, encryptMessage, decryptMessage } from '../../utiles/encryption';
+
+// const REACTIONS = ['👍', '❤️', '😊', '😮', '😢', '👏'];
+
+// export default function ChatRoom() {
+//   const [messages, setMessages] = useState([]);
+//   const [newMessage, setNewMessage] = useState('');
+//   const [recipient, setRecipient] = useState(null);
+//   const [isLoading, setIsLoading] = useState(false);
+//   const [showReactions, setShowReactions] = useState(false);
+//   const [selectedMessage, setSelectedMessage] = useState(null);
+//   const [isBlocked, setIsBlocked] = useState(false);
+//   const [hasBlockedMe, setHasBlockedMe] = useState(false);
+//   const [secretKey, setSecretKey] = useState(null);
+  
+//   const currentUser = auth.currentUser;
+//   const flatListRef = useRef(null);
+//   const router = useRouter();
+//   const { chatId, recipientId } = useLocalSearchParams();
+
+//   // Check block status
+//   useEffect(() => {
+//     const checkBlockStatus = async () => {
+//       // Check if current user has blocked recipient
+//       const blockDoc = await getDoc(doc(db, 'blocks', `${currentUser.uid}_${recipientId}`));
+//       setIsBlocked(blockDoc.exists());
+
+//       // Check if recipient has blocked current user
+//       const reverseBlockDoc = await getDoc(doc(db, 'blocks', `${recipientId}_${currentUser.uid}`));
+//       setHasBlockedMe(reverseBlockDoc.exists());
+//     };
+
+//     checkBlockStatus();
+//     // Listen for block status changes
+//     const unsubscribeBlock = onSnapshot(
+//       doc(db, 'blocks', `${currentUser.uid}_${recipientId}`),
+//       (doc) => setIsBlocked(doc.exists())
+//     );
+    
+//     const unsubscribeReverseBlock = onSnapshot(
+//       doc(db, 'blocks', `${recipientId}_${currentUser.uid}`),
+//       (doc) => setHasBlockedMe(doc.exists())
+//     );
+
+//     return () => {
+//       unsubscribeBlock();
+//       unsubscribeReverseBlock();
+//     };
+//   }, [currentUser.uid, recipientId]);
+// const g = async () => {
+//   try {
+//     const result = await ImagePicker.launchImageLibraryAsync({
+//       mediaTypes: ['images', 'videos'],
+//       quality: 0.8,
+//     });
+
+//     if (!result.canceled) {
+//       const imageUri = result.assets[0].uri;
+//       const response = await fetch(imageUri);
+//       const blob = await response.blob();
+
+//       const fileRef = ref(storage, `${currentUser.uid}/${Date.now()}`);
+//       await uploadBytes(fileRef, blob);
+
+//       const downloadUrl = await getDownloadURL(fileRef);
+//       sendMessage(null, 'image', downloadUrl);
+//     }
+//   } catch (error) {
+//     console.error('Error selecting image:', error);
+//   }
+// }
+//   // Handle blocking/unblocking
+//   const toggleBlock = async () => {
+//     const blockId = `${currentUser.uid}_${recipientId}`;
+//     const blockRef = doc(db, 'blocks', blockId);
+
+//     try {
+//       if (isBlocked) {
+//         await deleteDoc(blockRef);
+//         Alert.alert('Unblocked', 'You have unblocked this user');
+//       } else {
+//         await setDoc(blockRef, {
+//           blockedBy: currentUser.uid,
+//           blockedUser: recipientId,
+//           timestamp: serverTimestamp(),
+//         });
+//         Alert.alert('Blocked', 'You have blocked this user');
+//       }
+//     } catch (error) {
+//       console.error('Error toggling block status:', error);
+//       Alert.alert('Error', 'Failed to update block status');
+//     }
+//   };
+
+//   // Modified message sending to check block status
+//   const sendMessage = async (text, type = 'text', fileUrl = null) => {
+//     if (!text.trim() && !fileUrl) return;
+//     if (hasBlockedMe) {
+//       Alert.alert('Unable to Send', 'You cannot send messages to this user');
+//       return;
+//     }
+
+//     try {
+//       setIsLoading(true);
+//       const messageData = {
+//         text: text.trim(),
+//         type,
+//         sender: currentUser.uid,
+//         timestamp: serverTimestamp(),
+//         status: 'sent',
+//         reactions: {},
+//         ...(fileUrl && { fileUrl })
+//       };
+
+//       if (!messageData) {
+//         alert('Message or secret key missing');
+//         return;
+//       }
+
+//       const encrypted = encryptMessage(messageData, secretKey);
+//       await addDoc(collection(db, 'chats', chatId, 'messages'), {
+//         messageData,
+//         sender: currentUser.uid,
+//         timestamp: serverTimestamp(),
+//         status: 'sent'
+//       });
+
+//       setNewMessage('');
+//     } catch (error) {
+//       console.error('Error sending message:', error.message);
+//       Alert.alert('Error', 'Failed to send message');
+//     } finally {
+//       setIsLoading(false);
+//     }
+//   }; 
+
+//   // Modified message rendering to show in correct order
+//   const renderMessage = ({ item, index }) => {
+//     const isOwnMessage = item.sender === currentUser.uid;
+//     const reactionCount = Object.keys(item.reactions || {}).length;
+//     const showAvatar = !isOwnMessage && (!messages[index - 1] || messages[index - 1].sender !== item.sender);
+
+//     return (
+//       <View style={{
+//         marginVertical: 4,
+//         marginHorizontal: 8,
+//         maxWidth: '80%',
+//         alignSelf: isOwnMessage ? 'flex-end' : 'flex-start',
+//         flexDirection: isOwnMessage ? 'row-reverse' : 'row',
+//         alignItems: 'flex-end',
+//       }}>
+//         {showAvatar && !isOwnMessage && (
+//           <View style={{
+//             width: 32,
+//             height: 32,
+//             borderRadius: 16,
+//             marginRight: 8,
+//             backgroundColor: '#2196F3',
+//             justifyContent: 'center',
+//             alignItems: 'center',
+//           }}>
+//             <Text style={{ color: '#FFF', fontSize: 14 }}>
+//               {recipient?.username?.[0]?.toUpperCase()}
+//             </Text>
+//           </View>
+//         )}
+        
+//         <View style={{
+//           backgroundColor: isOwnMessage ? '#E3F2FD' : '#F5F5F5',
+//           borderRadius: 16,
+//           padding: 12,
+//           marginBottom: reactionCount > 0 ? 15 : 0,
+//           marginLeft: !isOwnMessage && !showAvatar ? 40 : 0,
+//         }}>
+//           {item.type === 'image' ? (
+//             <Image
+//               source={{ uri: item.fileUrl }}
+//               style={{ width: 200, height: 200, borderRadius: 8 }}
+//               resizeMode="cover"
+//             />
+//           ) : (
+//             <Text style={{ fontSize: 16, color: '#333' }}>{item.text}</Text>
+//           )}
+          
+//           <Text style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+//             {new Date(item.timestamp).toLocaleTimeString()}
+//           </Text>
+//         </View>
+//       </View>
+//     );
+//   };
+
+//   return (
+//     <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+//       {/* Header with Block Button */}
+//       <View style={{
+//         flexDirection: 'row',
+//         alignItems: 'center',
+//         padding: 16,
+//         borderBottomWidth: 1,
+//         borderBottomColor: '#E0E0E0',
+//         backgroundColor: '#F8F9FA',
+//       }}>
+//         <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 12 }}>
+//           <MaterialIcons name="arrow-back" size={24} color="#2196F3" />
+//         </TouchableOpacity>
+        
+//         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+//           {recipient?.photoURL ? (
+//             <Image
+//               source={{ uri: recipient.photoURL }}
+//               style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }}
+//             />
+//           ) : (
+//             <View style={{
+//               width: 40,
+//               height: 40,
+//               borderRadius: 20,
+//               backgroundColor: '#2196F3',
+//               justifyContent: 'center',
+//               alignItems: 'center',
+//               marginRight: 12,
+//             }}>
+//               <Text style={{ color: '#FFF', fontSize: 18 }}>
+//                 {recipient?.username?.[0]?.toUpperCase()}
+//               </Text>
+//             </View>
+//           )}
+          
+//           <Text style={{ fontSize: 18, fontWeight: '600', color: '#333' }}>
+//             {recipient?.username}
+//           </Text>
+//         </View>
+
+//         <TouchableOpacity onPress={toggleBlock} style={{
+//           padding: 8,
+//           backgroundColor: isBlocked ? '#FF5252' : '#E0E0E0',
+//           borderRadius: 8,
+//         }}>
+//           <Text style={{ color: isBlocked ? '#FFF' : '#333' }}>
+//             {isBlocked ? 'Unblock' : 'Block'}
+//           </Text>
+//         </TouchableOpacity>
+//       </View>
+
+//       {/* Blocked Message Banner */}
+//       {(isBlocked || hasBlockedMe) && (
+//         <View style={{
+//           backgroundColor: '#FFE0E0',
+//           padding: 12,
+//           alignItems: 'center',
+//         }}>
+//           <Text style={{ color: '#D32F2F' }}>
+//             {isBlocked
+//               ? 'You have blocked this user'
+//               : 'You cannot send messages to this user'}
+//           </Text>
+//         </View>
+//       )}
+
+//       {/* Messages List */}
+//       <FlatList
+//         ref={flatListRef}
+//         data={messages}
+//         renderItem={renderMessage}
+//         keyExtractor={(item) => item.id}
+//         contentContainerStyle={{ paddingVertical: 16 }}
+//       />
+
+//       {/* Input Area */}
+//       <KeyboardAvoidingView
+//         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+//         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+//         style={{
+//           borderTopWidth: 1,
+//           borderTopColor: '#E0E0E0',
+//           backgroundColor: '#F8F9FA',
+//           opacity: (isBlocked || hasBlockedMe) ? 0.5 : 1,
+//         }}
+//       >
+//         <View style={{
+//           flexDirection: 'row',
+//           alignItems: 'center',
+//           padding: 12,
+//         }}>
+//           <TouchableOpacity
+//             onPress={g}
+//             style={{ marginRight: 12 }}
+//             disabled={isBlocked || hasBlockedMe}
+//           >
+//             <MaterialIcons name="image" size={24} color="#2196F3" />
+//           </TouchableOpacity>
+          
+//           <TextInput
+//             value={newMessage}
+//             onChangeText={setNewMessage}
+//             placeholder={
+//               isBlocked || hasBlockedMe
+//                 ? "You cannot send messages"
+//                 : "Type a message..."
+//             }
+//             style={{
+//               flex: 1,
+//               backgroundColor: '#FFF',
+//               borderRadius: 20,
+//               paddingHorizontal: 16,
+//               paddingVertical: 8,
+//               marginRight: 12,
+//               fontSize: 16,
+//             }}
+//             multiline
+//             editable={!(isBlocked || hasBlockedMe)}
+//           />
+          
+//           <TouchableOpacity
+//             onPress={() => sendMessage(newMessage)}
+//             disabled={isLoading || !newMessage.trim() || isBlocked || hasBlockedMe}
+//           >
+//             {isLoading ? (
+//               <ActivityIndicator color="#2196F3" />
+//             ) : (
+//               <MaterialIcons
+//                 name="send"
+//                 size={24}
+//                 color={newMessage.trim() && !(isBlocked || hasBlockedMe) ? '#2196F3' : '#B0BEC5'}
+//               />
+//             )}
+//           </TouchableOpacity>
+//         </View>
+//       </KeyboardAvoidingView>
+//     </View>
+//   );
+// }

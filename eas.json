@@ -1,0 +1,37 @@
+{
+  "cli": {
+    "version": ">= 14.5.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "gradleCommand": "assembleDebug"
+      }
+    },
+    "development-simulator": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "gradleCommand": "assembleRelease"
+      }
+    },
+    "production": {
+      "autoIncrement": true
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
+// com.yourcompany.studentsnetworking
+// A1:06:E5:82:44:D2:DF:C0:03:E0:D7:52:8A:E8:03:72:B1:29:B9:76
+// A1:06:E5:82:44:D2:DF:C0:03:E0:D7:52:8A:E8:03:72:B1:29:B9:76

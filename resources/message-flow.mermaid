@@ -1,0 +1,64 @@
+sequenceDiagram
+    participant UA as User A (Sender)
+    participant FB as Firebase
+    participant UB as User B (Receiver)
+    
+    UA->>FB: 1. Get User B's public key
+    FB-->>UA: 2. Return public key
+    Note over UA: 3. Encrypt message with B's public key
+    UA->>FB: 4. Store encrypted message
+    FB->>UB: 5. Real-time update
+    Note over UB: 6. Decrypt with private key
+    UB->>FB: 7. Update read status
+const formatTimeAgo = (date) => {
+  const now = new Date();
+  const diffInSeconds = Math.floor((now - new Date(date)) / 1000);
+  
+  if (diffInSeconds < 60) {
+    return 'just now';
+  } else if (diffInSeconds < 3600) {
+    const minutes = Math.floor(diffInSeconds / 60);
+    return `${minutes}m ago`;
+  } else if (diffInSeconds < 86400) {
+    const hours = Math.floor(diffInSeconds / 3600);
+    return `${hours}h ago`;
+  } else {
+    const days = Math.floor(diffInSeconds / 86400);
+    return `${days}d ago`;
+  }
+};
+
+// Add the ImageGallery component for multiple images
+const ImageGallery = ({ images }) => {
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const renderImage = ({ item, index }) => (
+    <TouchableOpacity
+      activeOpacity={0.9}
+      onPress={() => setActiveIndex(index)}
+      style={styles.galleryImageContainer}
+    >
+      <Image
+        source={{ uri: item }}
+        style={styles.galleryImage}
+        resizeMode="cover"
+      />
+      {index === 3 && images.length > 4 && (
+        <View style={styles.imageOverlay}>
+          <Text style={styles.imageCount}>+{images.length - 4}</Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+
+  return (
+    <View style={styles.galleryContainer}>
+      <FlatList
+        data={images.slice(0, 4)}
+        renderItem={renderImage}
+        keyExtractor={(item, index) => index.toString()}
+        numColumns={2}
+        scrollEnabled={false}
+      />
+    </View>
+  );
