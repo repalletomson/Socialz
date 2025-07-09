@@ -8,7 +8,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { 
   collection, query, orderBy, onSnapshot, doc, limit, 
   getDocs, updateDoc, serverTimestamp, arrayUnion, arrayRemove,
-  where, addDoc
+  where, addDoc, getDoc
 } from 'firebase/firestore';
 import { db } from '../../config/firebaseConfig';
 import { supabase } from '../../config/supabaseConfig';
@@ -22,8 +22,9 @@ import {
   State
 } from 'react-native-gesture-handler';
 import { AES, enc } from 'react-native-crypto-js';
-import { useAuth } from '../../context/authContext';
+import { useAuthStore } from '../../stores/useAuthStore';
 import networkErrorHandler from '../../utiles/networkErrorHandler';
+// import Clipboard from 'expo-clipboard';
 
 dayjs.extend(relativeTime);
 
@@ -214,6 +215,23 @@ const truncateMessage = (text, maxLength = 35) => {
   return text.substring(0, maxLength) + '...';
 };
 
+const MessageActionModal = ({ visible, onClose, onDelete, isOwnMessage }) => (
+  <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.7)' }}>
+      <View style={{ backgroundColor: COLORS.cardBg, borderRadius: 16, padding: 24, width: 250, alignItems: 'center' }}>
+        {isOwnMessage && (
+          <TouchableOpacity onPress={onDelete} style={{ paddingVertical: 12, width: '100%' }}>
+            <Text style={{ color: '#FFFFFF', fontSize: 16, textAlign: 'center', fontWeight: '600', fontFamily: 'GeneralSans-Medium' }}>Delete Message</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity onPress={onClose} style={{ paddingVertical: 12, width: '100%' }}>
+          <Text style={{ color: COLORS.text, fontSize: 16, textAlign: 'center', fontWeight: '500', fontFamily: 'GeneralSans-Regular' }}>Cancel</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </Modal>
+);
+
 export default function ChatRoom() {
   const { chatId, recipientId } = useLocalSearchParams();
   const [messages, setMessages] = useState([]);
@@ -229,9 +247,12 @@ export default function ChatRoom() {
   const scrollViewRef = useRef(null);
   const lastMessageRef = useRef(null);
   const unsubscribeRef = useRef({});
-  const { user } = useAuth();
+  const { user } = useAuthStore();
+  const [actionModalVisible, setActionModalVisible] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState(null);
+  const [hasBlockedMe, setHasBlockedMe] = useState(false);
 
-  const currentUserId = user?.uid;
+  const currentUserId = user?.id;
 
   // Update last seen in Supabase
   const updateLastSeen = async () => {
@@ -309,6 +330,25 @@ export default function ChatRoom() {
     }
   };
 
+  // Helper to check block status for both sides
+  const checkMutualBlockStatus = async () => {
+    try {
+      if (!currentUserId || !recipientId) return;
+      const currentUserRef = doc(db, 'users', currentUserId);
+      const recipientUserRef = doc(db, 'users', recipientId);
+      const [currentUserSnap, recipientUserSnap] = await Promise.all([
+        getDoc(currentUserRef),
+        getDoc(recipientUserRef)
+      ]);
+      const currentBlocked = currentUserSnap.data()?.blockedUsers || [];
+      const recipientBlocked = recipientUserSnap.data()?.blockedUsers || [];
+      setIsBlocked(currentBlocked.includes(recipientId));
+      setHasBlockedMe(recipientBlocked.includes(currentUserId));
+    } catch (error) {
+      console.error('Error checking block status:', error);
+    }
+  };
+
   useEffect(() => {
     if (!chatId || !recipientId || !currentUserId) return;
 
@@ -361,6 +401,8 @@ export default function ChatRoom() {
       setIsTyping(data?.typingUsers?.includes(recipientId) || false);
     });
 
+    checkMutualBlockStatus();
+
     return () => Object.values(unsubscribeRef.current).forEach(unsub => unsub?.());
   }, [chatId, recipientId, currentUserId]);
 
@@ -408,12 +450,32 @@ export default function ChatRoom() {
 
   const handleBlock = async () => {
     try {
+      if (!currentUserId || !recipientId) return;
+      const currentUserRef = doc(db, 'users', currentUserId);
+      await updateDoc(currentUserRef, {
+        blockedUsers: arrayUnion(recipientId)
+      });
       setIsBlocked(true);
       setShowBlockModal(false);
       Alert.alert("User Blocked", `You have blocked ${recipient?.fullName || 'this user'} successfully.`);
     } catch (error) {
       console.error('Error blocking user:', error);
       Alert.alert("Error", "Failed to block user");
+    }
+  };
+
+  const handleUnblock = async () => {
+    try {
+      if (!currentUserId || !recipientId) return;
+      const currentUserRef = doc(db, 'users', currentUserId);
+      await updateDoc(currentUserRef, {
+        blockedUsers: arrayRemove(recipientId)
+      });
+      setIsBlocked(false);
+      Alert.alert('User Unblocked', 'You have unblocked this user. You can now send messages.');
+    } catch (error) {
+      console.error('Error unblocking user:', error);
+      Alert.alert('Error', 'Failed to unblock user');
     }
   };
 
@@ -593,6 +655,30 @@ export default function ChatRoom() {
     </View>
   );
 
+  const handleLongPressMessage = (message) => {
+    setSelectedMessage(message);
+    setActionModalVisible(true);
+  };
+
+  // const handleCopyMessage = () => {
+  //   if (selectedMessage) {
+  //     // Clipboard.setStringAsync(selectedMessage.text || selectedMessage.content || '');
+  //     // Alert.alert('Copied', 'Message copied to clipboard');
+  //   }
+  //   setActionModalVisible(false);
+  // };
+
+  const handleDeleteMessage = async () => {
+    if (!selectedMessage) return;
+    try {
+      await updateDoc(doc(db, 'chats', chatId, 'messages', selectedMessage.id), { text: '', content: '', deleted: true });
+      setActionModalVisible(false);
+      Alert.alert('Deleted', 'Message deleted');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to delete message');
+    }
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={{ 
@@ -646,39 +732,34 @@ export default function ChatRoom() {
       <View style={{ flex: 1, backgroundColor: COLORS.background }}>
         <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
         
+        {/* Header always visible */}
         <ChatHeader />
 
-        {/* Messages Area */}
+        {/* Messages Area - inverted, most recent at bottom */}
         <ScrollView
           ref={scrollViewRef}
-          style={{ 
-            flex: 1, 
-            backgroundColor: COLORS.background,
-          }}
-          contentContainerStyle={{ 
+          style={{ flex: 1, backgroundColor: COLORS.background }}
+          contentContainerStyle={{
+            flexDirection: 'column',
+            justifyContent: 'flex-end',
             paddingTop: 20,
             paddingBottom: 20,
+            minHeight: '100%',
           }}
           onContentSizeChange={() => scrollToBottom()}
           showsVerticalScrollIndicator={false}
+          inverted
         >
-          {messages.map((message, index) => {
-            const prev = messages[index - 1];
-            const showDate = !prev || formatDateHeader(message.timestamp) !== formatDateHeader(prev.timestamp);
-            
+          {messages
+            .filter(message => !message.deleted && (message.text || message.content || message.message || message.body))
+            .map((message, index, arr) => {
+            const prev = arr[index - 1];
+            const showDate = !prev || formatDateHeader(message.timestamp) !== formatDateHeader(prev?.timestamp);
             return (
               <View key={message.id}>
                 {showDate && (
-                  <View style={{
-                    alignItems: 'center',
-                    marginVertical: 20,
-                  }}>
-                    <Text style={{
-                      color: COLORS.textSecondary,
-                      fontSize: 15,
-                      fontWeight: '600',
-                      fontFamily: 'GeneralSans-Medium',
-                    }}>
+                  <View style={{ alignItems: 'center', marginVertical: 20 }}>
+                    <Text style={{ color: COLORS.textSecondary, fontSize: 15, fontWeight: '600', fontFamily: 'GeneralSans-Medium' }}>
                       {formatDateHeader(message.timestamp)}
                     </Text>
                   </View>
@@ -690,39 +771,36 @@ export default function ChatRoom() {
                     marginHorizontal: 16,
                     marginVertical: 4,
                   }}>
-                    
-
                     <View style={{ 
                       alignItems: message.senderId === currentUserId ? "flex-end" : "flex-start",
                       maxWidth: "80%",
                     }}>
-                      
-
                       {/* Message Bubble */}
-                      <View style={{
-                        backgroundColor: message.senderId === currentUserId ? COLORS.accent : COLORS.messageOther,
-                        borderRadius: 16,
-                        paddingHorizontal: 12,
-                        paddingVertical: 8,
-                        borderTopRightRadius: message.senderId === currentUserId ? 4 : 16,
-                        borderTopLeftRadius: message.senderId === currentUserId ? 16 : 4,
-                        shadowColor: "#000",
-                        shadowOffset: { width: 0, height: 1 },
-                        shadowOpacity: 0.05,
-                        shadowRadius: 1,
-                        elevation: 1,
-                        maxWidth: "100%",
-                      }}>
-                        <Text style={{ 
-                          fontSize: 13, 
-                          color: "#FFFFFF", 
-                          lineHeight: 18,
-                          fontWeight: "400",
+                      <TouchableOpacity onLongPress={() => handleLongPressMessage(message)} activeOpacity={0.8}>
+                        <View style={{
+                          backgroundColor: message.senderId === currentUserId ? COLORS.accent : COLORS.messageOther,
+                          borderRadius: 16,
+                          paddingHorizontal: 12,
+                          paddingVertical: 8,
+                          borderTopRightRadius: message.senderId === currentUserId ? 4 : 16,
+                          borderTopLeftRadius: message.senderId === currentUserId ? 16 : 4,
+                          shadowColor: "#000",
+                          shadowOffset: { width: 0, height: 1 },
+                          shadowOpacity: 0.05,
+                          shadowRadius: 1,
+                          elevation: 1,
+                          maxWidth: "100%",
                         }}>
-                          {message.text || message.content || message.message || message.body || "No content"}
-                        </Text>
-                      </View>
-
+                          <Text style={{ 
+                            fontSize: 13, 
+                            color: "#FFFFFF", 
+                            lineHeight: 18,
+                            fontWeight: "400",
+                          }}>
+                            {message.text || message.content || message.message || message.body || "No content"}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
                       {/* Timestamp */}
                       <View style={{
                         alignItems: message.senderId === currentUserId ? "flex-end" : "flex-start",
@@ -745,52 +823,82 @@ export default function ChatRoom() {
           })}
         </ScrollView>
 
-        {/* Message Input */}
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
+        {/* Message Input - KeyboardAvoidingView only wraps input */}
+        {hasBlockedMe ? (
           <View style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            paddingHorizontal: 16,
-            paddingVertical: 12,
+            padding: 20,
             backgroundColor: COLORS.background,
             borderTopWidth: 0.5,
             borderTopColor: COLORS.border,
+            alignItems: 'center',
           }}>
-            <TouchableOpacity style={{ marginRight: 12 }}>
-              <Ionicons name="attach" size={24} color={COLORS.textSecondary} />
-            </TouchableOpacity>
-            
-            <TextInput
-              value={messageText}
-              onChangeText={setMessageText}
-              placeholder="Type Something..."
-              placeholderTextColor={COLORS.textSecondary}
+            <Text style={{ color: COLORS.danger, fontSize: 15, fontWeight: '600', textAlign: 'center', marginBottom: 12 }}>
+              You have been blocked and cannot send messages.
+            </Text>
+          </View>
+        ) : isBlocked ? (
+          <View style={{
+            padding: 20,
+            backgroundColor: COLORS.background,
+            borderTopWidth: 0.5,
+            borderTopColor: COLORS.border,
+            alignItems: 'center',
+          }}>
+            <Text style={{ color: COLORS.danger, fontSize: 15, fontWeight: '600', textAlign: 'center', marginBottom: 12 }}>
+              You have blocked this user. Unblock to send messages.
+            </Text>
+            <TouchableOpacity
+              onPress={handleUnblock}
               style={{
-                flex: 1,
-                backgroundColor: COLORS.background,
-                color: COLORS.text,
-                fontSize: 16,
-                paddingVertical: 8,
-                fontFamily: 'GeneralSans-Regular',
+                backgroundColor: COLORS.accent,
+                paddingHorizontal: 24,
+                paddingVertical: 10,
+                borderRadius: 8,
               }}
-              multiline
-            />
-            
-            <TouchableOpacity 
-              onPress={handleSendMessage}
-              disabled={!messageText.trim() || isBlocked}
-              style={{ marginLeft: 12 }}
             >
-              <Ionicons 
-                name="send" 
-                size={24} 
-                color={(!messageText.trim() || isBlocked) ? COLORS.textSecondary : COLORS.accent} 
-              />
+              <Text style={{ color: '#fff', fontWeight: '600', fontSize: 15 }}>Unblock</Text>
             </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
+        ) : (
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}>
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+              backgroundColor: COLORS.background,
+              borderTopWidth: 0.5,
+              borderTopColor: COLORS.border,
+            }}>
+              <TextInput
+                value={messageText}
+                onChangeText={setMessageText}
+                placeholder="Type Something..."
+                placeholderTextColor={COLORS.textSecondary}
+                style={{
+                  flex: 1,
+                  backgroundColor: COLORS.background,
+                  color: COLORS.text,
+                  fontSize: 16,
+                  paddingVertical: 8,
+                  fontFamily: 'GeneralSans-Regular',
+                }}
+                multiline
+              />
+              <TouchableOpacity 
+                onPress={handleSendMessage}
+                disabled={!messageText.trim()}
+                style={{ marginLeft: 12 }}
+              >
+                <Ionicons 
+                  name="send" 
+                  size={24} 
+                  color={!messageText.trim() ? COLORS.textSecondary : COLORS.accent} 
+                />
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
+        )}
 
         <ChatOptionsModal
           visible={showOptionsModal}
@@ -798,12 +906,17 @@ export default function ChatRoom() {
           onBlockUser={() => setShowBlockModal(true)}
           recipientName={recipient?.fullName}
         />
-
         <BlockUserModal
           visible={showBlockModal}
           onClose={() => setShowBlockModal(false)}
           onBlock={handleBlock}
           recipientName={recipient?.fullName}
+        />
+        <MessageActionModal
+          visible={actionModalVisible}
+          onClose={() => setActionModalVisible(false)}
+          onDelete={handleDeleteMessage}
+          isOwnMessage={selectedMessage && (selectedMessage.senderId === currentUserId || selectedMessage.sender === currentUserId)}
         />
       </View>
     </GestureHandlerRootView>

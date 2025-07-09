@@ -1,6 +1,25 @@
-import { Stack } from "expo-router";
+import { Redirect, Stack, Slot, useRouter } from "expo-router";
+import { BackHandler,Text,View } from 'react-native';
+import { useEffect } from 'react';
+import { useAuthStore } from '../../stores/useAuthStore';
 
 const Layout = () => {
+  const { isAuthenticated, isProfileComplete } = useAuthStore();
+  const router = useRouter();
+
+  // useEffect(() => {
+    // if (typeof isAuthenticated === 'undefined'){
+    //   return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }}>
+    //     <Text>Loading... in root layout please wait</Text>
+    //   </View>
+    // }
+    // if (!isAuthenticated) {
+    //   router.replace('/(auth)/welcome');
+    // } else if (!isProfileComplete) {
+    //   router.replace('/(auth)/onboarding');
+    // }
+  // }, [isAuthenticated, isProfileComplete]);
+
   return (
     <Stack>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

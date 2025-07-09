@@ -15,7 +15,6 @@ import {
   Dimensions,
 } from "react-native";
 import { supabase } from "../../../config/supabaseConfig";
-import { useAuth } from "../../../context/authContext";
 import { MaterialIcons, Ionicons, Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useNavigation, useRouter } from "expo-router";
@@ -24,6 +23,8 @@ import { BlurView } from 'expo-blur';
 import { useSafeNavigation } from '../../../hooks/useSafeNavigation';
 import networkErrorHandler from '../../../utiles/networkErrorHandler';
 import { Fonts, TextStyles } from '../../../constants/Fonts';
+import { scaleSize, verticalScale } from '../../../utiles/common';
+import { useFocusEffect } from '@react-navigation/native';
 
 // Updated color palette with gradients from bright to dull white
 const ThemeContext = React.createContext({
@@ -55,37 +56,67 @@ const darkTheme = {
   cardShadow: "rgba(0, 0, 0, 0.3)", // Dark shadow for dark mode
 };
 
-// Updated interests and branches
+// 🎯 What's Your Vibe? Updated Interests with Creative Flair
 const interests = [
-  "Programming",
-  "Artificial Intelligence",
-  "Web Development",
-  "Mobile Development",
-  "Data Science",
-  "Cybersecurity",
-  "Cloud Computing",
-  "UI/UX Design",
-  "Gaming",
-  "Movies & TV Shows",
-  "Music",
-  "Photography",
-  "Reading",
-  "Sports",
-  "Traveling",
-  "Cooking",
-  "Fitness",
-  "Art & Design"
+  { id: 'music', label: 'Music Vibes', icon: '🎧' },
+  { id: 'anime', label: 'Anime Fan', icon: '🌀' },
+  { id: 'kdrama', label: 'K-Drama Lover', icon: 'K' },
+  { id: 'photography', label: 'Shutterbug', icon: '📸' },
+  { id: 'movies', label: 'Movie Buff', icon: '🎬' },
+  { id: 'cricket', label: 'Cricket Fever', icon: '🏏' },
+  { id: 'coding', label: 'Code Wizard', icon: '💻' },
+  { id: 'gym', label: 'Gym Mode On', icon: '🏋️' },
+  { id: 'dance', label: 'Dance Floor Vibes', icon: '💃' },
+  { id: 'games', label: 'Pub G', icon: '🎮' },
+  { id: 'sports', label: 'Sports Lover', icon: '🏀' },
 ];
 
-const branches = [
-  "Computer Science",
-  "Information Technology",
-  "Electronics & Communication",
-  "Electrical Engineering",
-  "Mechanical Engineering",
-  "Civil Engineering",
+const allBranches = [
+  "Computer Science and Engineering (CSE)",
+  "Information Technology (IT)",
+  "Artificial Intelligence and Machine Learning (AIML)",
+  "Data Science (DS)",
+  "Cyber Security",
+  "Electronics and Communication Engineering (ECE)",
+  "Electrical and Electronics Engineering (EEE)",
+  "Mechanical Engineering (ME)",
+  "Civil Engineering (CE)",
   "Chemical Engineering",
-  "Biotechnology"
+  "Metallurgical Engineering",
+  "Instrumentation Engineering",
+  "Aeronautical Engineering",
+  "Mechatronics",
+  "Biomedical Engineering",
+  "Biotechnology",
+  "Mining Engineering",
+  "Mathematics and Computing",
+  "Engineering Physics",
+  "VLSI Design",
+  "Embedded Systems",
+  "Robotics",
+  "Environmental Engineering",
+  "B.Sc Computer Science",
+  "B.Sc Mathematics",
+  "B.Sc Electronics",
+  "B.Sc Physics",
+  "B.Sc Chemistry",
+  "B.Sc Data Science",
+  "B.Sc Biotechnology",
+  "B.Sc Statistics",
+  "B.Sc Psychology",
+  "B.Com (General)",
+  "B.Com Computers",
+  "B.Com Honors",
+  "BBA",
+  "BBA (Business Analytics)",
+  "BA Economics",
+  "BA Political Science",
+  "BA Psychology",
+  "BA Mass Communication",
+  "BA English Literature",
+  "BA Public Administration",
+  "BCA (Bachelor of Computer Applications)",
+  "B.S.W (Social Work)"
 ];
 
 // Sample bio messages for users who don't have one
@@ -106,9 +137,9 @@ export default function Connect()  {
   const colorScheme = useColorScheme();
   const theme = colorScheme === "dark" ? darkTheme : lightTheme;
   const router = useRouter();
-  const { user: currentUser } = useAuth();
-  const [users, setUsers] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [users, setUsers] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [totalConnections, setTotalConnections] = useState(0);
   const [selectedBranch, setSelectedBranch] = useState("");
@@ -135,19 +166,44 @@ export default function Connect()  {
     }
   });
 
+  useFocusEffect(
+    React.useCallback(() => {
+      let isActive = true;
+      const fetchUser = async () => {
+        const { data: { user: supaUser } } = await supabase.auth.getUser();
+        if (supaUser && isActive) {
+          // Fetch user profile from Supabase
+          const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', supaUser.id)
+            .single();
+          if (data && isActive) {
+            setCurrentUser(data);
+          }
+        }
+      };
+      fetchUser();
+      return () => { isActive = false; };
+    }, [])
+  );
+
   useEffect(() => {
-    if (currentUser?.uid) {
+    if (currentUser?.id) {
       loadRecommendations();
     }
-  }, [currentUser?.uid]);
+  }, [currentUser?.id]);
 
   const filteredUsers = users.filter((user) => {
     const matchesSearch = user.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) || false;
     const matchesBranch = !selectedBranch || user.branch === selectedBranch;
     const matchesInterests =
       selectedInterests.length === 0 ||
-      selectedInterests.some((interest) => user.interests?.toLowerCase().includes(interest.toLowerCase()));
-
+      selectedInterests.every((interest) =>
+        Array.isArray(user.interests)
+          ? user.interests.map(i => i.toLowerCase()).includes(interest.toLowerCase())
+          : (user.interests || '').toLowerCase().includes(interest.toLowerCase())
+      );
     return matchesSearch && matchesBranch && matchesInterests;
   });
   
@@ -160,7 +216,7 @@ export default function Connect()  {
       setLoading(true);
       console.log('🔍 Loading user recommendations from Supabase...');
 
-      if (!currentUser?.uid) {
+      if (!currentUser?.id) {
         console.log('❌ No current user found');
         setLoading(false);
         return;
@@ -170,7 +226,7 @@ export default function Connect()  {
       const { data: usersData, error } = await supabase
         .from('users')
         .select('*') // Fetch all fields from users table
-        .neq('id', currentUser.uid)
+        .neq('id', currentUser.id)
         // .limit(50);
         // console.log(usersData);
 
@@ -227,7 +283,7 @@ export default function Connect()  {
       
       const recipientId = user.userId || user.id;
       
-      if (!currentUser?.uid) {
+      if (!currentUser?.id) {
         Alert.alert('Error', 'You must be logged in to start a chat');
         return;
       }
@@ -240,7 +296,7 @@ export default function Connect()  {
       const chatsRef = collection(db, 'chats');
       const q = query(
         chatsRef,
-        where('participants', 'array-contains', currentUser.uid)
+        where('participants', 'array-contains', currentUser.id)
       );
       const snapshot = await getDocs(q);
       
@@ -255,7 +311,7 @@ export default function Connect()  {
       } else {
         // Create a new chat if one doesn't exist
         const newChatRef = await addDoc(chatsRef, {
-          participants: [currentUser.uid, recipientId],
+          participants: [currentUser.id, recipientId],
           createdAt: serverTimestamp(),
           lastMessageTime: serverTimestamp(),
           lastMessage: null
@@ -337,9 +393,9 @@ const ProfileModal = ({ user, visible, onClose }) => (
             {/* User avatar and basic info */}  
             <View style={{ alignItems: "center", gap: 16 }}> 
               <View style={{ 
-                width: 90, 
-                height: 90, 
-                borderRadius: 45,
+                width: scaleSize(90), 
+                height: scaleSize(90), 
+                borderRadius: scaleSize(45),
                 backgroundColor: theme.surface,
                 justifyContent: 'center',
                 alignItems: 'center',
@@ -348,7 +404,7 @@ const ProfileModal = ({ user, visible, onClose }) => (
               }}>
                 <Text style={{
                   color: theme.text,
-                  fontSize: 32,
+                  fontSize: scaleSize(32),
                   fontFamily: Fonts.GeneralSans.Bold,
                   letterSpacing: -0.3,
                 }}>
@@ -358,8 +414,8 @@ const ProfileModal = ({ user, visible, onClose }) => (
 
               <View style={{ alignItems: "center", gap: 4 }}>
                 <Text style={{ 
-                  fontSize: 20, 
-                  fontWeight: "bold", 
+                  fontSize: scaleSize(20), 
+                  fontFamily: Fonts.GeneralSans.Bold, 
                   color: theme.text,
                   letterSpacing: 0.4,
                 }}>
@@ -369,7 +425,7 @@ const ProfileModal = ({ user, visible, onClose }) => (
                 {/* Username if available */}
                 {user?.username && (
                   <Text style={{ 
-                    fontSize: 14, 
+                    fontSize: scaleSize(14), 
                     color: theme.textSecondary,
                     fontFamily: Fonts.GeneralSans.Medium,
                   }}>
@@ -380,9 +436,9 @@ const ProfileModal = ({ user, visible, onClose }) => (
                 {/* Branch and Year */}
                 {user?.branch && (
                   <Text style={{ 
-                    fontSize: 15, 
+                    fontSize: scaleSize(15), 
                     color: theme.primary,
-                    fontWeight: "600",
+                    fontFamily: Fonts.GeneralSans.Bold,
                     letterSpacing: 0.2,
                   }}>
                     {user.branch}
@@ -393,7 +449,7 @@ const ProfileModal = ({ user, visible, onClose }) => (
                 {/* College */}
                 {user?.college && (
                   <Text style={{ 
-                    fontSize: 13, 
+                    fontSize: scaleSize(13), 
                     color: theme.textSecondary,
                     marginTop: 2,
                     textAlign: 'center'
@@ -421,8 +477,8 @@ const ProfileModal = ({ user, visible, onClose }) => (
                 <Text style={{ 
                   color: theme.text,
                   fontStyle: "italic",
-                  fontSize: 14,
-                  lineHeight: 20,
+                  fontSize: scaleSize(14),
+                  lineHeight: scaleSize(20),
                   textAlign: "left",
                 }}>
                   "{user?.about || user?.bio}"
@@ -433,8 +489,8 @@ const ProfileModal = ({ user, visible, onClose }) => (
             {/* Interests */}
             <View style={{ width: "100%", alignItems: "flex-start", marginTop: 6 }}>
               <Text style={{ 
-                fontSize: 16,
-                fontWeight: "700",
+                fontSize: scaleSize(16),
+                fontFamily: Fonts.GeneralSans.Bold,
                 color: theme.text,
                 marginBottom: 12,
                 letterSpacing: 0.3,
@@ -451,15 +507,15 @@ const ProfileModal = ({ user, visible, onClose }) => (
                       <Text 
                         key={index}
                         style={{
-                          fontSize: 13,
+                          fontSize: scaleSize(13),
                           color: theme.primary,
                           backgroundColor: `${theme.primary}15`,
-                          paddingHorizontal: 12,
-                          paddingVertical: 6,
+                          paddingHorizontal: scaleSize(12),
+                          paddingVertical: scaleSize(6),
                           borderRadius: 16,
                           overflow: 'hidden',
                           marginBottom: 4,
-                          fontWeight: "500",
+                          fontFamily: Fonts.GeneralSans.Medium,
                         }}
                       >
                         {interest}
@@ -468,22 +524,22 @@ const ProfileModal = ({ user, visible, onClose }) => (
                   : user?.interests ? (
                       <Text 
                         style={{
-                          fontSize: 13,
+                          fontSize: scaleSize(13),
                           color: theme.primary,
                           backgroundColor: `${theme.primary}15`,
-                          paddingHorizontal: 12,
-                          paddingVertical: 6,
+                          paddingHorizontal: scaleSize(12),
+                          paddingVertical: scaleSize(6),
                           borderRadius: 16,
                           overflow: 'hidden',
                           marginBottom: 4,
-                          fontWeight: "500",
+                          fontFamily: Fonts.GeneralSans.Medium,
                         }}
                       >
                         {user?.interests}
                       </Text>
                     ) : (
                       <Text style={{
-                        fontSize: 13,
+                        fontSize: scaleSize(13),
                         color: theme.textSecondary,
                         fontStyle: 'italic'
                       }}>
@@ -504,10 +560,10 @@ const ProfileModal = ({ user, visible, onClose }) => (
           }}
           style={{
             backgroundColor: theme.primary,
-            paddingVertical: 14,
-            marginHorizontal: 20,
-            marginBottom: 20,
-            marginTop: 10,
+            paddingVertical: scaleSize(14),
+            marginHorizontal: scaleSize(20),
+            marginBottom: scaleSize(20),
+            marginTop: scaleSize(10),
             borderRadius: 12,
             flexDirection: "row",
             alignItems: "center",
@@ -519,12 +575,11 @@ const ProfileModal = ({ user, visible, onClose }) => (
             elevation: 3,
           }}
         >
-          <MaterialIcons name="message" size={18} color={theme.background} />
+          <MaterialIcons name="message" size={scaleSize(18)} color={theme.background} />
           <Text style={{ 
             color: theme.background, 
-            fontSize: 16, 
-            fontWeight: "600", 
-            marginLeft: 8,
+            fontSize: scaleSize(16), 
+            fontFamily: Fonts.GeneralSans.Semibold,
             letterSpacing: 0.3,
           }}>
             Message
@@ -541,35 +596,47 @@ const ProfileModal = ({ user, visible, onClose }) => (
       <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}>
         <View style={{ 
           backgroundColor: theme.surface, 
-          borderTopLeftRadius: 20, 
-          borderTopRightRadius: 20, 
-          padding: 20 
+          borderTopLeftRadius: scaleSize(24), 
+          borderTopRightRadius: scaleSize(24), 
+          padding: scaleSize(24),
+          paddingBottom: scaleSize(36),
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.18,
+          shadowRadius: 12,
+          elevation: 12,
         }}>
+          {/* Drag indicator */}
+          <View style={{ alignItems: 'center', marginBottom: 12 }}>
+            <View style={{ width: scaleSize(40), height: scaleSize(5), borderRadius: scaleSize(3), backgroundColor: theme.textSecondary, opacity: 0.3 }} />
+          </View>
+
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-            <Text style={{ fontSize: 20, fontWeight: "bold", color: theme.text }}>Filters</Text>
+            <Text style={{ fontSize: scaleSize(20), fontFamily: Fonts.GeneralSans.Bold, color: theme.text }}>Filters</Text>
             <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={22} color={theme.text} />
+              <Ionicons name="close" size={scaleSize(22)} color={theme.text} />
             </TouchableOpacity>
           </View>
 
           {/* Branch Filters */}
-          <Text style={{ fontSize: 16, color: theme.text, marginBottom: 10 }}>Branch</Text>
+          <Text style={{ fontSize: scaleSize(16), color: theme.text, marginBottom: 10 }}>Branch</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
             <View style={{ flexDirection: "row", gap: 8 }}>
-              {branches.map((branch) => (
+              {allBranches.map((branch) => (
                 <TouchableOpacity
                   key={branch}
                   onPress={() => setSelectedBranch(selectedBranch === branch ? "" : branch)}
                   style={{
-                    paddingHorizontal: 14,
-                    paddingVertical: 6,
+                    paddingHorizontal: scaleSize(14),
+                    paddingVertical: scaleSize(6),
                     borderRadius: 16,
                     backgroundColor: selectedBranch === branch ? theme.primary : theme.background,
                   }}
                 >
                   <Text style={{ 
                     color: selectedBranch === branch ? theme.background : theme.text,
-                    fontSize: 13
+                    fontSize: scaleSize(13),
+                    fontFamily: Fonts.GeneralSans.Medium,
                   }}>
                     {branch}
                   </Text>
@@ -579,33 +646,34 @@ const ProfileModal = ({ user, visible, onClose }) => (
           </ScrollView>
 
           {/* Interest Filters */}
-          <Text style={{ fontSize: 16, color: theme.text, marginBottom: 10 }}>Interests</Text>
+          <Text style={{ fontSize: scaleSize(16), color: theme.text, marginBottom: 10 }}>Interests</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
             {interests.map((interest) => (
               <TouchableOpacity
-                key={interest}
+                key={interest.id}
                 onPress={() => {
                   setSelectedInterests((prev) =>
-                    prev.includes(interest) ? prev.filter((i) => i !== interest) : [...prev, interest]
+                    prev.includes(interest.id) ? prev.filter((i) => i !== interest.id) : [...prev, interest.id]
                   );
                 }}
                 style={{
-                  paddingHorizontal: 14,
-                  paddingVertical: 6,
+                  paddingHorizontal: scaleSize(14),
+                  paddingVertical: scaleSize(6),
                   borderRadius: 16,
-                  backgroundColor: selectedInterests.includes(interest) ? theme.primary : theme.background,
+                  backgroundColor: selectedInterests.includes(interest.id) ? theme.primary : theme.background,
                 }}
               >
                 <Text style={{ 
-                  color: selectedInterests.includes(interest) ? theme.background : theme.text,
-                  fontSize: 13
+                  color: selectedInterests.includes(interest.id) ? theme.background : theme.text,
+                  fontSize: scaleSize(13),
+                  fontFamily: Fonts.GeneralSans.Medium,
                 }}>
-                  {interest}
+                  {interest.label}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
-
+{/* selectedCollege */}
           {/* Reset Button */}
           <TouchableOpacity
             onPress={() => {
@@ -615,14 +683,14 @@ const ProfileModal = ({ user, visible, onClose }) => (
             style={{
               backgroundColor: theme.background,
               borderRadius: 8,
-              paddingVertical: 12,
-              marginTop: 10,
+              paddingVertical: scaleSize(12),
+              marginTop: scaleSize(10),
               flexDirection: "row",
               alignItems: "center",
               justifyContent: "center",
             }}
           >
-            <Text style={{ color: theme.text, fontSize: 15 }}>Reset Filters</Text>
+            <Text style={{ color: theme.text, fontSize: scaleSize(15), fontFamily: Fonts.GeneralSans.Medium }}>Reset Filters</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -631,8 +699,14 @@ const ProfileModal = ({ user, visible, onClose }) => (
 
   if (loading) {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: theme.background }}>
-        <ActivityIndicator size="large" color={theme.primary} />
+      <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
+        <View style={{ alignItems: 'center', marginBottom: 24 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center' }}>
+            <Text style={{ fontSize: scaleSize(32), color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Medium, marginRight: 2, letterSpacing: -1 }}>social</Text>
+            <Text style={{ fontSize: scaleSize(44), color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Bold, letterSpacing: -2 }}>z.</Text>
+          </View>
+          <Text style={{ color: '#A1A1AA', fontSize: scaleSize(18), marginTop: 8, fontFamily: Fonts.GeneralSans.Medium }}>Loading...</Text>
+        </View>
       </View>
     );
   }
@@ -673,9 +747,9 @@ const ProfileModal = ({ user, visible, onClose }) => (
         {/* Profile Avatar */}
         <View style={{ marginBottom: 12 }}>
           <View style={{
-            width: 64,
-            height: 64,
-            borderRadius: 32,
+            width: scaleSize(64),
+            height: scaleSize(64),
+            borderRadius: scaleSize(32),
             backgroundColor: theme.surface,
             justifyContent: 'center',
             alignItems: 'center',
@@ -684,7 +758,7 @@ const ProfileModal = ({ user, visible, onClose }) => (
           }}>
             <Text style={{
               color: theme.text,
-              fontSize: 24,
+              fontSize: scaleSize(24),
               fontFamily: Fonts.GeneralSans.Bold,
               letterSpacing: -0.3,
             }}>
@@ -698,7 +772,7 @@ const ProfileModal = ({ user, visible, onClose }) => (
           {/* User Name - Single line */}
           <Text 
             style={{ 
-              fontSize: 16, 
+              fontSize: scaleSize(16), 
               fontFamily: Fonts.GeneralSans.Bold, 
               color: theme.text,
               textAlign: 'center',
@@ -711,23 +785,12 @@ const ProfileModal = ({ user, visible, onClose }) => (
           >
             {user.fullName}
           </Text>
-          
-          {/* Bio/Status - Single line */}
-          <Text 
-            style={{ 
-              fontSize: 12, 
-              color: theme.textSecondary,
-              textAlign: 'center',
-              lineHeight: 16,
-              marginBottom: 16,
-              paddingHorizontal: 4,
-              width: '100%',
-            }}
-            numberOfLines={1}
-            ellipsizeMode="tail"
-          >
-            {user.about || user.bio}
-          </Text>
+          {/* College Name - Single line */}
+          {user.college && (
+            <Text style={{ fontSize: scaleSize(13), color: theme.textSecondary, marginBottom: 16, textAlign: 'center', width: '100%' }} numberOfLines={1} ellipsizeMode="tail">
+              {typeof user.college === 'object' ? user.college.name : user.college}
+            </Text>
+          )}
         </View>
         
         {/* Message Button */}
@@ -759,10 +822,10 @@ const ProfileModal = ({ user, visible, onClose }) => (
               gap: 6,
             }}
           >
-            <MaterialIcons name="message" size={14} color="white" />
+            <MaterialIcons name="message" size={scaleSize(14)} color="white" />
             <Text style={{ 
               color: "white", 
-              fontSize: 14, 
+              fontSize: scaleSize(14), 
               fontFamily: Fonts.GeneralSans.Semibold,
               letterSpacing: 0.3,
             }}>
@@ -800,9 +863,9 @@ const ProfileModal = ({ user, visible, onClose }) => (
     >
       {/* User Profile Avatar */}
       <View style={{
-        width: 56,
-        height: 56,
-        borderRadius: 28,
+        width: scaleSize(56),
+        height: scaleSize(56),
+        borderRadius: scaleSize(28),
         backgroundColor: theme.surface,
         justifyContent: 'center',
         alignItems: 'center',
@@ -812,7 +875,7 @@ const ProfileModal = ({ user, visible, onClose }) => (
       }}>
         <Text style={{
           color: theme.text,
-          fontSize: 20,
+          fontSize: scaleSize(20),
           fontFamily: Fonts.GeneralSans.Bold,
           letterSpacing: -0.3,
         }}>
@@ -822,15 +885,14 @@ const ProfileModal = ({ user, visible, onClose }) => (
       
       {/* User Info */}
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 16, fontFamily: Fonts.GeneralSans.Semibold, color: theme.text, marginBottom: 4 }}>
+        <Text style={{ fontSize: scaleSize(16), fontFamily: Fonts.GeneralSans.Semibold, color: '#FFFFFF', marginBottom: 2 }}>
           {user.fullName}
         </Text>
-        <Text style={{ fontSize: 13, color: theme.textSecondary, marginBottom: 2 }}>
-          {user.interests || ""}
-        </Text>
-        <Text style={{ fontSize: 12, color: theme.textSecondary, fontStyle: 'italic' }}>
-          {user.about || user.bio}
-        </Text>
+        {user.college && (
+          <Text style={{ fontSize: scaleSize(13), color: theme.textSecondary, marginBottom: 2 }}>
+            {typeof user.college === 'object' ? user.college.name : user.college}
+          </Text>
+        )}
       </View>
 
       {/* Message Button */}
@@ -859,7 +921,7 @@ const ProfileModal = ({ user, visible, onClose }) => (
             justifyContent: "center",
           }}
         >
-          <Text style={{ color: "white", fontSize: 14, fontFamily: Fonts.GeneralSans.Semibold }}>Message</Text>
+          <Text style={{ color: "white", fontSize: scaleSize(14), fontFamily: Fonts.GeneralSans.Semibold }}>Message</Text>
         </TouchableOpacity>
       </LinearGradient>
     </TouchableOpacity>
@@ -969,7 +1031,7 @@ const ProfileModal = ({ user, visible, onClose }) => (
         }}
       >  
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-          <Text style={{ fontSize: 26, fontFamily: Fonts.GeneralSans.Bold, color: theme.text, letterSpacing: 0.5 }}>
+          <Text style={TextStyles.h3}>
             Connect with People
           </Text>
           <View style={{ flexDirection: "row", gap: 12 }}>

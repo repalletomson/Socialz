@@ -37,39 +37,39 @@ const COLORS = {
 const motivationalCards = [
   {
     id: 1,
-    title: "Share college life",
-    subtitle: "Post here",
+    title: "Wanna post anything about your college life?",
+    subtitle: "share your story @Socialz.",
     icon: "school-outline",
     gradient: ['#1C1C1C', '#2E2E2E', '#555555'], // Dark Fog → Charcoal Gray → Smoky Gray
     action: "/(root)/createpost",
-    buttonText: "Post",
+    buttonText: "Post Now",
   },
   {
     id: 2,
-    title: "Chat with friends",
-    subtitle: "Connect & build relationships",
+    title: "Chat with friends and Connect ",
+    subtitle: "Find people from different colleges",
     icon: "chatbubbles-outline",
     gradient: ['#2E2E2E', '#708090', '#A3BFD9'], // Charcoal Gray → Slate Gray → Blur Blue
     action: "/(root)/(tabs)/chat",
-    buttonText: "Chat",
+    buttonText: "Chat Now",
   },
   {
     id: 3,
-    title: "Post daily for streaks",
+    title: "Post daily to earn streaks",
     subtitle: "Get into Spotlight",
     icon: "flame-outline",
     gradient: ['#555555', '#708090', '#B0BEC5'], // Smoky Gray → Slate Gray → Cool Mist
     action: "/(root)/streak",
-    buttonText: "Streak",
+    buttonText: "Top streakers @Socialz.",
   },
   {
     id: 4,
-    title: "Explore Spaces",
-    subtitle: "Join communities",
+    title: "Join Spaces that interests you",
+    subtitle: " From college fests,movies to career tips ",
     icon: "planet-outline",
     gradient: ['#1C1C1C', '#555555', '#A3BFD9'], // Dark Fog → Smoky Gray → Blur Blue
     action: "/(root)/(tabs)/groups",
-    buttonText: "Explore",
+    buttonText: "Explore Now",
   },
 ];
 

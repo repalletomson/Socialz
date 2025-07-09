@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,17 +6,20 @@ import {
   TouchableOpacity,
   Alert,
   Dimensions,
+  Share,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useAuth } from '../context/authContext';
+import { useAuthStore } from '../stores/useAuthStore';
 import { safeNavigate } from '../utiles/safeNavigation';
 import {
   addLike,
   removeLike,
   hasUserLiked,
   hasUserSaved,
+  incrementShareCount,
 } from '../(apis)/post';
+import { Fonts, TextStyles } from '../constants/Fonts';
 
 const { width, height } = Dimensions.get('window');
 
@@ -71,11 +74,12 @@ const formatTimestamp = (timestamp) => {
 
 // Profile PostCard Component (without horizontal margins)
 const ProfilePostCard = ({ post }) => {
-  const { user } = useAuth();
   const router = useRouter();
+  const { user } = useAuthStore();
   const [isLiked, setIsLiked] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [likes, setLikes] = useState(0);
+  const [shareCount, setShareCount] = useState(post.share_count || 0);
   const [isLikeProcessing, setIsLikeProcessing] = useState(false);
 
   useEffect(() => {
@@ -129,6 +133,33 @@ const ProfilePostCard = ({ post }) => {
     }
   };
 
+  const handleShare = useCallback(async () => {
+    try {
+      const appName = "SocialZ";
+      const appDescription = "Your ultimate student networking platform!";
+      const deepLink = `socialz://post/${post.id}`; // Deep link to post detail view
+      const playStoreLink = "https://play.google.com/store/apps/details?id=com.student.app"; // Your actual Android package
+      const appStoreLink = "https://apps.apple.com/app/socialz/id123456789"; // Replace with your actual App Store ID
+      const username = post.userName || post.user_name || post.username || 'Anonymous';
+      
+      // Create a more shareable message with clickable links
+      const shareMessage = `${post.title ? post.title + '\n\n' : ''}${post.content}\n\nPosted by @${username}\n\n${appDescription}\n\n📱 Download ${appName}:\nAndroid: ${playStoreLink}\niOS: ${appStoreLink}\n\n🔗 View this post: ${playStoreLink}\n\n#SocialZ #StudentNetworking #CollegeLife`;
+      
+      const result = await Share.share({
+        title: post.title || `${post.userName}'s ${appName} Post`,
+        message: shareMessage,
+        url: playStoreLink, // Use Play Store link as fallback for better compatibility
+      });
+      
+      if (result.action === Share.sharedAction) {
+        await incrementShareCount(post.id);
+        setShareCount((prev) => prev + 1);
+      }
+    } catch (error) {
+      Alert.alert("Error", "Failed to share post");
+    }
+  }, [post.id, post.title, post.userName, post.content]);
+
   const renderImageGrid = () => {
     const images = post?.mediaUrls || post?.images || [];
     
@@ -155,7 +186,7 @@ const ProfilePostCard = ({ post }) => {
                 <Image source={{ uri }} style={{ width: '100%', height: '100%', borderRadius: 12 }} resizeMode="cover" />
                 {index === 3 && images.length > 4 && (
                   <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: 12, justifyContent: 'center', alignItems: 'center' }}>
-                    <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>+{images.length - 4}</Text>
+                    <Text style={{ ...TextStyles.body2, color: 'white', fontWeight: 'bold' }}>+{images.length - 4}</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -223,29 +254,19 @@ const ProfilePostCard = ({ post }) => {
               borderWidth: 2,
               borderColor: colors.accent,
             }}>
-              <Text style={{
-                color: colors.text,
-                fontSize: 16,
-                fontWeight: '800',
-                letterSpacing: -0.3,
-              }}>
+              <Text style={{ ...TextStyles.body2, color: colors.text }}>
                 {post.profile_initials || post.user_initials || 
                  (post.userName || post.user_name || 'A').charAt(0).toUpperCase()}
               </Text>
             </View>
             <View style={{ flex: 1 }}>
               <Text
-                style={{
-                  fontWeight: "600",
-                  fontSize: 16,
-                  color: colors.text,
-                  marginBottom: 2,
-                }}
+                style={{ ...TextStyles.body2, color: colors.text, marginBottom: 2 }}
               >
                 @{post.username || post.user_username || (post.userName || post.user_name || 'anonymous').toLowerCase()}
               </Text>
               
-              <Text style={{ fontSize: 14, color: colors.textSecondary, fontWeight: '500' }}>
+              <Text style={{ ...TextStyles.caption, color: colors.textSecondary }}>
                 {formatTimestamp(post.createdAt || post.created_at)}
               </Text>
             </View>
@@ -255,12 +276,7 @@ const ProfilePostCard = ({ post }) => {
         {/* Post Content */}
         <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
           <Text
-            style={{
-              color: colors.text,
-              fontSize: 16,
-              lineHeight: 24,
-              fontWeight: '400',
-            }}
+            style={{ ...TextStyles.body1, color: colors.text }}
             numberOfLines={3}
           >
             {post.content}
@@ -302,12 +318,7 @@ const ProfilePostCard = ({ post }) => {
               />
               {likes > 0 && (
                 <Text
-                  style={{
-                    marginLeft: 8,
-                    color: isLiked ? colors.like : colors.textSecondary,
-                    fontSize: 14,
-                    fontWeight: '600',
-                  }}
+                  style={{ ...TextStyles.body2, marginLeft: 8, color: isLiked ? colors.like : colors.textSecondary }}
                 >
                   {likes > 999 ? `${(likes / 1000).toFixed(1)}K` : likes}
                 </Text>
@@ -330,12 +341,7 @@ const ProfilePostCard = ({ post }) => {
               <Ionicons name="chatbubble-outline" size={20} color={colors.textSecondary} />
               {(post.comment_count || 0) > 0 && (
                 <Text
-                  style={{
-                    marginLeft: 8,
-                    color: colors.textSecondary,
-                    fontSize: 14,
-                    fontWeight: '600',
-                  }}
+                  style={{ ...TextStyles.body2, marginLeft: 8, color: colors.textSecondary }}
                 >
                   {post.comment_count > 999 ? `${(post.comment_count / 1000).toFixed(1)}K` : post.comment_count}
                 </Text>
@@ -353,8 +359,16 @@ const ProfilePostCard = ({ post }) => {
                 minWidth: 60,
                 justifyContent: "center",
               }}
+              onPress={handleShare}
             >
               <Ionicons name="share-outline" size={20} color={colors.textSecondary} />
+              {shareCount > 0 && (
+                <Text
+                  style={{ ...TextStyles.body2, marginLeft: 8, color: colors.textSecondary }}
+                >
+                  {shareCount > 999 ? `${(shareCount / 1000).toFixed(1)}K` : shareCount}
+                </Text>
+              )}
             </TouchableOpacity>
           </View>
 

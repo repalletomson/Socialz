@@ -11,13 +11,14 @@ import {
   StatusBar
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useAuth } from '../../context/authContext';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../config/supabaseConfig';
 import { useSafeNavigation } from '../../hooks/useSafeNavigation';
 import { getSavedPosts } from '../../(apis)/post';
 import ProfilePostCard from '../../components/ProfilePostCard';
 import { Fonts, TextStyles } from '../../constants/Fonts';
+import { scaleSize, verticalScale } from '../../utiles/common';
+import { useFocusEffect } from '@react-navigation/native';
 
 // Consistent Color Palette - Black Theme with Purple Accents
 const COLORS = {
@@ -33,12 +34,11 @@ const COLORS = {
 };
 
 const Profile = () => {
-  const [userData, setUserData] = useState(null);
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const isMounted = useRef(true);
   
-  const { loginOut, user, isAuthenticated } = useAuth();
   const router = useRouter();
 
   const [activeTab, setActiveTab] = useState('About');
@@ -51,7 +51,7 @@ const Profile = () => {
     ],
     onCleanup: () => {
       // Clean up any state here
-      setUserData(null);
+      setUser(null);
       setLoading(false);
     }
   });
@@ -69,39 +69,18 @@ const Profile = () => {
   }, [safeNavigate]);
 
   // Load user data from Supabase
-  const loadUserData = async () => {
-    try {
-      if (!user?.uid || !isMounted.current) {
-        console.log('No user found in context');
-        if (isMounted.current) setLoading(false);
-        return;
+  useEffect(() => {
+    async function fetchUser() {
+      setLoading(true);
+      const { data: { user: supaUser } } = await supabase.auth.getUser();
+      if (supaUser?.id) {
+        const { data, error } = await supabase.from('users').select('*').eq('id', supaUser.id).single();
+        if (!error && data) setUser(data);
       }
-
-      console.log('Loading user data for:', user.uid);
-      
-      // Get user data from Supabase
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', user.uid)
-        .single();
-
-      if (error) {
-        console.error('Error fetching user data:', error);
-        // Use context user data if database fetch fails
-        if (isMounted.current) setUserData(user);
-      } else {
-        console.log('User data loaded successfully:', data);
-        if (isMounted.current) setUserData(data);
-      }
-    } catch (error) {
-      console.error('Error loading user data:', error);
-      // Fallback to context user data
-      if (isMounted.current) setUserData(user);
-    } finally {
-      if (isMounted.current) setLoading(false);
+      setLoading(false);
     }
-  };
+    fetchUser();
+  }, []);
 
   // Handle logout with confirmation
   const handleLogout = () => {
@@ -115,7 +94,7 @@ const Profile = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await loginOut();
+              await supabase.auth.signOut();
               // Don't manually navigate - let the auth context handle it
               // The auth context will automatically redirect when isAuthenticated becomes false
             } catch (error) {
@@ -128,14 +107,27 @@ const Profile = () => {
     );
   };
 
-  // Load data when component mounts
-  useEffect(() => {
-    if (isAuthenticated && user) {
-      loadUserData();
-    } else {
-      if (isMounted.current) setLoading(false);
-    }
-  }, [user, isAuthenticated]);
+  useFocusEffect(
+    React.useCallback(() => {
+      let isActive = true;
+      const fetchUser = async () => {
+        const { data: { user: supaUser } } = await supabase.auth.getUser();
+        if (supaUser && isActive) {
+          const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', supaUser.id)
+            .single();
+          if (data && isActive) {
+            // Use this user data for all logic
+            // setCurrentUser(data); // or update state as needed
+          }
+        }
+      };
+      fetchUser();
+      return () => { isActive = false; };
+    }, [])
+  );
 
   // Show loading state
   if (loading) {
@@ -147,21 +139,22 @@ const Profile = () => {
         backgroundColor: COLORS.background 
       }}>
         <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
-        <ActivityIndicator size="large" color={COLORS.accent} />
-        <Text style={{ 
-          marginTop: 16, 
-          color: COLORS.textSecondary,
-          fontSize: 16,
-          fontFamily: Fonts.GeneralSans.Medium
-        }}>
-          Loading profile...
-        </Text>
+        <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ alignItems: 'center', marginBottom: 24 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center' }}>
+              <Text style={{ fontSize: scaleSize(32), color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Medium, marginRight: 2, letterSpacing: -1 }}>social</Text>
+              <Text style={{ fontSize: scaleSize(44), color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Bold, letterSpacing: -2 }}>z.</Text>
+            </View>
+            <Text style={{ color: '#A1A1AA', fontSize: scaleSize(18), marginTop: 8, fontFamily: Fonts.GeneralSans.Medium }}>Loading...</Text>
+          </View>
+          <ActivityIndicator size="large" color="#8B5CF6" />
+        </View>
       </View>
     );
   }
 
   // Show authentication required if not logged in
-  if (!isAuthenticated || !user) {
+  if (!user) {
     return (
       <View style={{ 
         flex: 1, 
@@ -198,11 +191,7 @@ const Profile = () => {
             borderRadius: 20,
           }}
         >
-          <Text style={{
-            color: '#FFFFFF',
-            fontSize: 16,
-            fontFamily: Fonts.GeneralSans.Bold,
-          }}>
+          <Text style={TextStyles.button}>
             Sign In
           </Text>
         </TouchableOpacity>
@@ -223,13 +212,10 @@ const Profile = () => {
         paddingHorizontal: 20,
         paddingBottom: 16,
       }}>
-        <Text style={{
-          fontSize: 28,
-          fontFamily: Fonts.GeneralSans.Bold,
-          color: COLORS.text,
-        }}>
-          SocialZ
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
+          <Text style={{ fontSize: 26, color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Medium, marginRight: 2, letterSpacing: -1 }}>social</Text>
+          <Text style={{ fontSize: 30, color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Bold, letterSpacing: -2 }}>z.</Text>
+        </View>
         <TouchableOpacity
           onPress={() => router.push('/(root)/settings')}
           style={{
@@ -276,10 +262,10 @@ const Profile = () => {
                 borderWidth: 2,
                 borderColor: COLORS.accent,
               }}>
-                {userData?.profile_image || userData?.profileImage ? (
+                {user?.profile_image || user?.profileImage ? (
                   <Image
                     source={{ 
-                      uri: userData?.profile_image || userData?.profileImage
+                      uri: user?.profile_image || user?.profileImage
                     }}
                     style={{ width: '100%', height: '100%' }}
                     resizeMode="cover"
@@ -291,7 +277,7 @@ const Profile = () => {
                     fontWeight: '800',
                     letterSpacing: -0.5,
                   }}>
-                    {userData?.profile_initials || userData?.full_name?.charAt(0) || 'U'}
+                    {user?.profile_initials || user?.full_name?.charAt(0) || 'U'}
                   </Text>
                 )}
               </View>
@@ -304,7 +290,7 @@ const Profile = () => {
                 marginBottom: 2,
                 letterSpacing: -0.3,
               }}>
-                {userData?.full_name || userData?.fullName || 'User'}
+                {user?.full_name || user?.fullName || 'User'}
               </Text>
               <Text style={{
                 fontSize: 15,
@@ -312,11 +298,11 @@ const Profile = () => {
                 marginBottom: 8,
                 fontFamily: Fonts.GeneralSans.Regular,
               }}>
-                @{userData?.username || 'username'}
+                @{user?.username || 'username'}
               </Text>
 
               {/* Bio */}
-              {userData?.bio && (
+              {user?.bio && (
                 <Text style={{
                   color: COLORS.textSecondary,
                   fontSize: 15,
@@ -324,13 +310,13 @@ const Profile = () => {
                   marginBottom: 12,
                   fontFamily: Fonts.GeneralSans.Regular,
                 }}>
-                  {userData.bio}
+                  {user.bio}
                 </Text>
               )}
 
               {/* College and Education Info */}
               {/* <View style={{ flexDirection: 'column', gap: 6 }}>
-                {(userData?.college || userData?.branch) && (
+                {(user?.college || user?.branch) && (
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <MaterialIcons name="school" size={16} color={COLORS.textMuted} />
                     <Text style={{
@@ -339,14 +325,14 @@ const Profile = () => {
                       marginLeft: 6,
                       fontWeight: '400',
                     }}>
-                      {userData?.college && userData?.branch 
-                        ? `${userData.branch} at ${userData.college}`
-                        : userData?.college || userData?.branch}
+                      {user?.college && user?.branch 
+                        ? `${user.branch} at ${user.college}`
+                        : user?.college || user?.branch}
                     </Text>
                   </View>
                 )}
                 
-                {userData?.passout_year && (
+                {user?.passout_year && (
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <MaterialIcons name="event" size={16} color={COLORS.textMuted} />
                     <Text style={{
@@ -355,7 +341,7 @@ const Profile = () => {
                       marginLeft: 6,
                       fontWeight: '400',
                     }}>
-                      Class of {userData.passout_year}
+                      Class of {user.passout_year}
                     </Text>
                   </View>
                 )}
@@ -423,7 +409,7 @@ const Profile = () => {
           {activeTab === 'About' && (
             <View style={{ gap: 16 }}>
               {/* Education Details Card */}
-              {(userData?.college || userData?.branch || userData?.passout_year) && (
+              {(user?.college || user?.branch || user?.passout_year) && (
                 <View style={{
                   backgroundColor: COLORS.cardBg,
                   borderRadius: 12,
@@ -446,18 +432,18 @@ const Profile = () => {
                     </Text>
                   </View>
                   
-                  {userData?.college && (
+                  {user?.college && (
                     <View style={{
                       flexDirection: 'row',
                       alignItems: 'center',
                       padding: 16,
-                      borderBottomWidth: userData?.branch || userData?.passout_year ? 1 : 0,
+                      borderBottomWidth: user?.branch || user?.passout_year ? 1 : 0,
                       borderBottomColor: COLORS.border,
                     }}>
                       <Ionicons name="school-outline" size={20} color={COLORS.accent} />
                       <View style={{ marginLeft: 12, flex: 1 }}>
                         <Text style={{ color: COLORS.textSecondary, fontSize: 15, fontWeight: '500' }}>
-                          {userData.college}
+                          {user.college}
                         </Text>
                         <Text style={{ color: COLORS.textMuted, fontSize: 13 }}>
                           College/University
@@ -466,18 +452,18 @@ const Profile = () => {
                     </View>
                   )}
                   
-                  {userData?.branch && (
+                  {user?.branch && (
                     <View style={{
                       flexDirection: 'row',
                       alignItems: 'center',
                       padding: 16,
-                      borderBottomWidth: userData?.passout_year ? 1 : 0,
+                      borderBottomWidth: user?.passout_year ? 1 : 0,
                       borderBottomColor: COLORS.border,
                     }}>
                       <Ionicons name="book-outline" size={20} color={COLORS.accent} />
                       <View style={{ marginLeft: 12, flex: 1 }}>
                         <Text style={{ color: COLORS.textSecondary, fontSize: 15, fontWeight: '500' }}>
-                          {userData.branch}
+                          {user.branch}
                         </Text>
                         <Text style={{ color: COLORS.textMuted, fontSize: 13 }}>
                           Branch/Course
@@ -486,7 +472,7 @@ const Profile = () => {
                     </View>
                   )}
 
-                  {userData?.passout_year && (
+                  {user?.passout_year && (
                     <View style={{
                       flexDirection: 'row',
                       alignItems: 'center',
@@ -495,7 +481,7 @@ const Profile = () => {
                       <Ionicons name="calendar-outline" size={20} color={COLORS.accent} />
                       <View style={{ marginLeft: 12, flex: 1 }}>
                         <Text style={{ color: COLORS.textSecondary, fontSize: 15, fontWeight: '500' }}>
-                          Class of {userData.passout_year}
+                          Class of {user.passout_year}
                         </Text>
                         <Text style={{ color: COLORS.textMuted, fontSize: 13 }}>
                           Expected Graduation
@@ -507,7 +493,7 @@ const Profile = () => {
               )}
 
               {/* Interests Card */}
-              {userData?.interests && (
+              {user?.interests && (
                 <View style={{
                   backgroundColor: COLORS.cardBg,
                   borderRadius: 12,
@@ -536,11 +522,11 @@ const Profile = () => {
                   }}>
                     <Ionicons name="heart-outline" size={20} color={COLORS.accent} />
                     <Text style={{ color: COLORS.textSecondary, fontSize: 15, marginLeft: 12, flex: 1, lineHeight: 22 }}>
-                      {Array.isArray(userData.interests) ? 
-                        userData.interests.map(interest => 
+                      {Array.isArray(user.interests) ? 
+                        user.interests.map(interest => 
                           interest.charAt(0).toUpperCase() + interest.slice(1)
                         ).join(', ') : 
-                        userData.interests
+                        user.interests
                       }
                     </Text>
                   </View>
@@ -550,11 +536,11 @@ const Profile = () => {
           )}
 
           {activeTab === 'Posts' && (
-            <UserPostsList userId={userData?.id || userData?.uid} />
+            <UserPostsList userId={user?.id || user?.id} />
           )}
 
           {activeTab === 'Saved Posts' && (
-            <SavedPostsList userId={userData?.id || userData?.uid} />
+            <SavedPostsList userId={user?.id || user?.id} />
           )}
         </View>
       </ScrollView>
@@ -622,12 +608,7 @@ const UserPostsList = ({ userId }) => {
       ) : (
         <View style={{ alignItems: 'center', marginTop: 40 }}>
           <Ionicons name="documents-outline" size={48} color={COLORS.textMuted} />
-          <Text style={{ 
-            color: COLORS.textMuted, 
-            marginTop: 16, 
-            fontSize: 16,
-            fontWeight: '500'
-          }}>
+          <Text style={TextStyles.body}>
             No Posts Yet
           </Text>
           <Text style={{
@@ -707,15 +688,7 @@ const SavedPostsList = ({ userId }) => {
           }}>
             No Saved Posts Yet
           </Text>
-          <Text style={{
-            color: COLORS.textMuted,
-            marginTop: 8,
-            fontSize: 14,
-            textAlign: 'center',
-            paddingHorizontal: 40,
-          }}>
-            This user hasn't saved any posts.
-          </Text>
+         
         </View>
       )}
     </ScrollView>

@@ -15,7 +15,7 @@ import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { doc, deleteDoc, updateDoc, arrayUnion, serverTimestamp, arrayRemove } from "firebase/firestore";
 import { db } from "../config/firebaseConfig";
 import { AES, enc } from "react-native-crypto-js";
-import { useAuth } from "../context/authContext";
+import { useAuthStore } from '../stores/useAuthStore';
 
 const DRAG_THRESHOLD = 80;
 
@@ -258,7 +258,7 @@ const EditMessageModal = ({ visible, onClose, onSave, initialText }) => {
 
 export const MessageItem = React.memo(
   ({ item, onReply, recipientId, chatId, onBlock, disappearingMessages }) => {
-    const { user } = useAuth();
+    const { user } = useAuthStore();
     const [timeLeft, setTimeLeft] = useState(null);
     const [showOptions, setShowOptions] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);

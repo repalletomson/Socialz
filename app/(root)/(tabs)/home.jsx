@@ -16,6 +16,7 @@ import {
   InteractionManager,
   ActivityIndicator,
   RefreshControl,
+  StyleSheet,
 } from 'react-native';
 import { Ionicons, FontAwesome, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSharedValue, useAnimatedStyle, withSpring, withTiming, interpolate } from 'react-native-reanimated';
@@ -24,7 +25,7 @@ import { supabase } from '../../../config/supabaseConfig';
 import { getFeedPosts } from '../../../(apis)/post';
 import PostCard from '../../../components/PostCard';
 import MotivationalCarousel from '../../../components/MotivationalCarousel';
-import { useAuth } from '../../../context/authContext';
+import { useAuthStore } from '../../../stores/useAuthStore';
 import CreatePostScreen from '../../../components/CreatePost';
 import { AppText } from '../../_layout';
 import { router } from 'expo-router';
@@ -36,7 +37,8 @@ import EventEmitter from '../../../utiles/EventEmitter';
 import networkErrorHandler from '../../../utiles/networkErrorHandler';
 import { getUserStreak, subscribeToStreakChanges } from '../../../(apis)/streaks';
 import { Fonts, TextStyles } from '../../../constants/Fonts';
-
+import { scaleSize, verticalScale } from '../../../utiles/common';
+// import {useStreak} from '../../../hooks/useStreak';
 const { width } = Dimensions.get('window');
 
 const COLORS = {
@@ -67,8 +69,8 @@ export default function EnhancedHome() {
   const [hotPost, setHotPost] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showFullButton, setShowFullButton] = useState(true);
-  const [currentStreak, setCurrentStreak] = useState(0);
-  const { user } = useAuth();
+  // const [currentStreak, setCurrentStreak] = useState(0);
+  const [user, setUser] = useState(null);
   const scrollY = useRef(new Animated.Value(0)).current;
   const shareButtonScale = useSharedValue(1);
   const cardOpacity = useSharedValue(0);
@@ -77,7 +79,8 @@ export default function EnhancedHome() {
   const lastFetchTime = useRef(0);
   const searchBarHeight = useSharedValue(0);
   const searchBarOpacity = useSharedValue(0);
-
+  const [currentStreak, setCurrentStreak] = useState(0);
+  const [streakLoading, setStreakLoading] = useState(false);
   const { safeNavigate } = useSafeNavigation({
     onCleanup: () => {
       if (isModalVisible) {
@@ -94,56 +97,68 @@ export default function EnhancedHome() {
         fetchPosts();
       }
     });
-
+  
     const channel = supabase
-    .channel('realtime-posts-feed')
-    .on(
-      'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'posts' },
-      (payload) => {
-        console.log('Realtime insert event:', payload);
-        fetchPosts(true);
-      }
-    )
-    .subscribe((status) => {
-      console.log('Subscription status:', status);
-    });
-
+      .channel('realtime-posts-feed')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'posts' },
+        (payload) => {
+          console.log('Realtime insert event:', payload);
+          fetchPosts(true);
+        }
+      )
+      .subscribe((status) => {
+        console.log('Subscription status:', status);
+      });
+  
     const deleteListener = EventEmitter.on('post-deleted', (deletedPostId) => {
       if (isMounted.current) {
         setPosts(prevPosts => prevPosts.filter(p => p.id !== deletedPostId));
       }
     });
-
-    // Fetch and subscribe to user's streak
+  
+    // Fetch and subscribe to user's streak - IMPROVED VERSION
     let streakUnsubscribe;
-    if (user?.uid) {
-      // Fetch initial streak
-      getUserStreak(user.uid).then(streakData => {
-        if (isMounted.current) {
-          setCurrentStreak(streakData?.current_streak || 0);
+    if (user?.id) {
+      (async () => {
+        try {
+          setStreakLoading(true);
+          const streakData = await getUserStreak(user.id);
+          if (isMounted.current) {
+            setCurrentStreak(streakData?.current_streak || 0);
+            setStreakLoading(false);
+          }
+          
+          // Subscribe to real-time updates
+          streakUnsubscribe = subscribeToStreakChanges(user.id, (payload) => {
+            if (isMounted.current && payload.new) {
+              setCurrentStreak(payload.new.current_streak || 0);
+            }
+          });
+        } catch (error) {
+          console.error('Error fetching streak:', error);
+          if (isMounted.current) {
+            setCurrentStreak(0);
+            setStreakLoading(false);
+          }
         }
-      }).catch(error => {
-        console.error('Error fetching initial streak:', error);
-      });
-
-      // Subscribe to real-time streak updates
-      streakUnsubscribe = subscribeToStreakChanges(user.uid, (payload) => {
-        if (isMounted.current && payload.new) {
-          setCurrentStreak(payload.new.current_streak || 0);
-        }
-      });
+      })();
+    } else {
+      // No user, set to 0 immediately
+      setCurrentStreak(0);
+      setStreakLoading(false);
     }
   
     return () => {
       isMounted.current = false;
       supabase.removeChannel(channel);
-      deleteListener(); // Unsubscribe from the event listener
+      deleteListener();
       if (streakUnsubscribe) {
         supabase.removeChannel(streakUnsubscribe);
       }
     };
-  }, [user?.uid]);
+  }, [user?.id]);
 
   useEffect(() => {
     const channel = supabase
@@ -380,10 +395,10 @@ export default function EnhancedHome() {
     return (
       <TouchableOpacity onPress={() => router.push(`/postDetailView/${post.id}`)} >
       <View className="flex-row items-center">
-        <Image source={{ uri: post.userPhotoURL || user?.profileImage || 'https://cdn-icons-png.flaticon.com/512/149/149071.png' }} className="w-8 h-8 rounded-full mr-2" style={{ borderWidth: 1, borderColor: colors.accent }} />
+        <Image source={{ uri:  user?.profile_initials || 'https://cdn-icons-png.flaticon.com/512/149/149071.png' }} className="w-8 h-8 rounded-full mr-2" style={{ borderWidth: 1, borderColor: colors.accent }} />
         <View>
-          <AppText style={{ color: colors.text, fontFamily: Fonts.GeneralSans.Semibold, fontSize: 14 }}>{post.userName || 'Anonymous'}</AppText>
-          <AppText style={{ color: colors.secondaryText, fontSize: 10 }}>{formattedTime}</AppText>
+          <AppText style={TextStyles.body1}>{post.userName || 'Anonymous'}</AppText>
+          <AppText style={TextStyles.caption}>{formattedTime}</AppText>
         </View>
       </View>
       </TouchableOpacity>
@@ -437,38 +452,40 @@ export default function EnhancedHome() {
       }}>
         {/* Left Section - App Name and Streak */}
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <AppText style={{ 
-            color: colors.text, 
-            fontSize: 22,
-            fontFamily: Fonts.GeneralSans.Bold,
-            marginRight: 12,
-          }}>
-            SocialZ
+          <AppText style={TextStyles.h1}>
+          <AppText style={{ fontSize: 26, color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Medium, marginRight: 3, letterSpacing: -1 }}>Social</AppText>
+          <AppText style={{ fontSize: 28, color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Bold, letterSpacing: -2, marginRight: 3 }}>z.</AppText>
           </AppText>
            {/* Streak Icon */}
            <TouchableOpacity 
-             onPress={() => router.push('/streak')} 
-             style={{ 
-               flexDirection: 'row', 
-               alignItems: 'center',
-               backgroundColor: 'rgba(139, 92, 246, 0.1)',
-               paddingHorizontal: 8,
-               paddingVertical: 4,
-               borderRadius: 12,
-               borderWidth: 1,
-               borderColor: 'rgba(139, 92, 246, 0.3)',
-             }}
-           >
-            <MaterialCommunityIcons name="fire" size={20} color={COLORS.accent} />
-            <Text style={{ 
-              color: colors.accent, 
-              marginLeft: 4, 
-              fontFamily: Fonts.GeneralSans.Bold,
-              fontSize: 16,
-            }}>
-              {currentStreak}
-            </Text>
-           </TouchableOpacity>
+  onPress={() => router.push('/streak')} 
+  style={{ 
+    flexDirection: 'row', 
+    alignItems: 'center',
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderColor: 'rgba(139, 92, 246, 0.3)',
+    opacity: streakLoading ? 0.6 : 1, // Reduced opacity while loading
+  }}
+>
+  <MaterialCommunityIcons name="fire" size={20} color={COLORS.accent} />
+  {streakLoading ? (
+    <View style={{ marginLeft: 4, width: 20, height: 20, justifyContent: 'center' }}>
+      <ActivityIndicator size="small" color={COLORS.accent} />
+    </View>
+  ) : (
+    <Text style={{ 
+      color: COLORS.accent, // Fixed: was colors.accent
+      marginLeft: 4, 
+      fontFamily: Fonts.GeneralSans.Bold,
+      fontSize: 16,
+    }}>
+      {currentStreak}
+    </Text>
+  )}
+</TouchableOpacity>
         </View>
 
         {/* Right Section - Search and Profile */}
@@ -497,12 +514,7 @@ export default function EnhancedHome() {
           >
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Ionicons name="search" size={16} color={colors.text} />
-              <AppText style={{ 
-                color: colors.text, 
-                marginLeft: 6, 
-                fontSize: 13, 
-                fontFamily: Fonts.GeneralSans.Medium 
-              }}>
+              <AppText style={TextStyles.body2}>
                 Search
               </AppText>
             </View>
@@ -529,12 +541,7 @@ export default function EnhancedHome() {
                 resizeMode="cover"
               />
             ) : (
-                          <Text style={{
-              color: colors.text,
-              fontSize: 16,
-              fontFamily: Fonts.GeneralSans.Bold,
-              letterSpacing: -0.3,
-            }}>
+                          <Text style={TextStyles.body2}>
               {user?.profile_initials || user?.full_name?.charAt(0) || user?.fullName?.charAt(0) || 'U'}
             </Text>
             )}
@@ -580,17 +587,12 @@ export default function EnhancedHome() {
               resizeMode="cover"
             />
           ) : (
-            <Text style={{
-              color: colors.text,
-              fontSize: 14,
-              fontFamily: Fonts.GeneralSans.Bold,
-              letterSpacing: -0.3,
-            }}>
+            <Text style={TextStyles.body2}>
               {user?.profile_initials || user?.full_name?.charAt(0) || user?.fullName?.charAt(0) || 'U'}
             </Text>
           )}
         </View>
-        <Text style={{ color: colors.secondaryText, fontSize: 16 }}>What's happening?</Text>
+        <Text style={TextStyles.body2}>What's on your mind? post it</Text>
         <View style={{ flex: 1 }} />
         <Ionicons name="images-outline" size={24} color={colors.accent} />
       </TouchableOpacity>
@@ -615,19 +617,25 @@ export default function EnhancedHome() {
 
   const memoizedPosts = useMemo(() => filteredPosts, [filteredPosts]);
 
-  if (loading === 0) {
-    console.log('nothing')
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-        <StatusBar barStyle="light-content" backgroundColor={colors.background} />
-      </SafeAreaView>
-    );
-  }
+  useEffect(() => {
+    async function fetchUser() {
+      setLoading(true);
+      const { data: { user: supaUser } } = await supabase.auth.getUser();
+      if (supaUser?.id) {
+        const { data, error } = await supabase.from('users').select('*').eq('id', supaUser.id).single();
+        if (!error && data) setUser(data);
+      }
+      setLoading(false);
+    }
+    fetchUser();
+  }, []);
+
+  if (loading) return <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: '#fff' }}>Loading...</Text></View>;
 
   return (
     <SafeViewErrorBoundary>
-      <SafeAreaView style={{ flex: 1, backgroundColor: 'black' }}>
-        <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+        <StatusBar barStyle="light-content" backgroundColor={colors.background} translucent={false} />
         
         {/* Sticky Header */}
         <Header />
@@ -651,8 +659,14 @@ export default function EnhancedHome() {
         )}
         
         {loading && posts.length === 0 ? (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            <ActivityIndicator size="large" color={COLORS.accent} />
+          <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{ alignItems: 'center', marginBottom: 24 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center' }}>
+                <Text style={{ fontSize: scaleSize(32), color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Medium, marginRight: 2, letterSpacing: -1 }}>social</Text>
+                <Text style={{ fontSize: scaleSize(44), color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Bold, letterSpacing: -2 }}>z.</Text>
+              </View>
+              <Text style={{ color: '#A1A1AA', fontSize: scaleSize(18), marginTop: 8, fontFamily: Fonts.GeneralSans.Medium }}>Loading..</Text>
+            </View>
           </View>
         ) : (
         <FlatList
@@ -689,10 +703,38 @@ export default function EnhancedHome() {
             onPostCreated={(newPost) => {
               setPosts(prevPosts => [newPost, ...prevPosts]);
               setFilteredPosts(prevPosts => [newPost, ...prevPosts]);
-          }}
-        />
+            }}
+          />
         </Modal>
+        {/* Floating Create Post Button */}
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={() => router.push('/createpost')}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="add" size={32} color="#fff" />
+        </TouchableOpacity>
       </SafeAreaView>
     </SafeViewErrorBoundary>
   );
 }
+
+const styles = StyleSheet.create({
+  fab: {
+    position: 'absolute',
+    right: 24,
+    bottom: 90,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: COLORS.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    zIndex: 100,
+  },
+});

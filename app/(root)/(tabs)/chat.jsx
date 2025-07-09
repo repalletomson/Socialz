@@ -35,7 +35,7 @@ import {
 } from 'firebase/firestore';
 
 import { router } from 'expo-router';
-import { useAuth } from '../../../context/authContext';
+import { useAuthStore } from '../../../stores/useAuthStore';
 import { db } from '../../../config/firebaseConfig';
 import { supabase } from '../../../config/supabaseConfig';
 import { formatMessageTime } from '../../../utiles/dateFormat';
@@ -46,6 +46,8 @@ import { AppText } from '../../_layout';
 import { useSafeNavigation } from '../../../hooks/useSafeNavigation';
 import networkErrorHandler from '../../../utiles/networkErrorHandler';
 import { Fonts, TextStyles } from '../../../constants/Fonts';
+import { scaleSize, verticalScale } from '../../../utiles/common';
+import { useFocusEffect } from '@react-navigation/native';
 
 const DEFAULT_PROFILE='https://assets.grok.com/users/8c354dfe-946c-4a32-b2de-5cb3a8ab9776/generated/h4epnwdFODX6hW0L/image.jpg';
 
@@ -84,6 +86,7 @@ const { width } = Dimensions.get('window');
 const SECRET_KEY = "kliq-secure-messaging-2024";
 
 export default function ChatList() {
+  const { user, isAuthenticated } = useAuthStore();
   const [chats, setChats] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -94,7 +97,6 @@ export default function ChatList() {
   const [error, setError] = useState(null);
   const [showNewChatModal, setShowNewChatModal] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
-  const { user } = useAuth();
   const [unreadCounts, setUnreadCounts] = useState({});
   const mounted = useRef(true);
   const searchTimeout = useRef(null);
@@ -113,15 +115,17 @@ export default function ChatList() {
 
   // Remove early return for !user?.uid
   // Instead, use a variable to conditionally render loading UI
-  const showLoading = !user?.uid;
+  const showLoading = !isAuthenticated || !user?.id;
+
+  if (showLoading) return <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: '#fff' }}>Loading...</Text></View>;
 
   // chats.js (only showing the unread count retrieval part)
   useEffect(() => {
     // Guard against null user
-    if (!user?.uid) return;
+    if (!user?.id) return;
     
     const q = query(
-      collection(db, "unreadCounts", user.uid, "senders")
+      collection(db, "unreadCounts", user.id, "senders")
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const counts = {};
@@ -131,7 +135,7 @@ export default function ChatList() {
       setUnreadCounts(counts);
     });
     return () => unsubscribe();
-  }, [user?.uid]);
+  }, [user?.id]);
 
   useEffect(() => {
     const backHandler = BackHandler.addEventListener(
@@ -205,14 +209,14 @@ export default function ChatList() {
       setLoading(true);
       
       // Check if user is authenticated
-      if (!user?.uid) {
+      if (!user?.id) {
         throw new Error('User not authenticated');
       }
 
       // Enhanced query to capture all chats including newly created ones
       const chatsQuery = query( 
         collection(db, 'chats'),
-        where('participants', 'array-contains', user.uid)
+        where('participants', 'array-contains', user.id)
         // Removed orderBy to ensure all chats are captured first
       );
       
@@ -230,7 +234,7 @@ export default function ChatList() {
                 lastMessageTime: chatData.lastMessageTime || chatData.createdAt || new Date()
               };
             }
-            const otherUserId = getOtherParticipantId(chatData.participants, user.uid);
+            const otherUserId = getOtherParticipantId(chatData.participants, user.id);
             if (!otherUserId) return null;
 
             const userDetails = await fetchUserDetails(otherUserId);
@@ -262,7 +266,7 @@ export default function ChatList() {
 
           // Setup unread counts listener
           const unreadQ = query(
-            collection(db, "unreadCounts", user.uid, "senders")
+            collection(db, "unreadCounts", user.id, "senders")
           );
           const unreadUnsubscribe = onSnapshot(unreadQ, (snapshot) => {
             const counts = {};
@@ -300,7 +304,7 @@ export default function ChatList() {
         setLoading(false);
       }
     }
-  }, [getOtherParticipantId, user?.uid]);
+  }, [getOtherParticipantId, user?.id]);
 
   useEffect(() => {
     loadChats();
@@ -314,7 +318,7 @@ export default function ChatList() {
 
   // Modified handleSearch to fetch all users from Supabase instead of Firebase
   const handleSearch = useCallback(async (queryText) => {
-    if (!queryText.trim() || !user?.uid) {
+    if (!queryText.trim() || !user?.id) {
       setSearchResults([]);
       setSearching(false);
       return;
@@ -337,7 +341,7 @@ export default function ChatList() {
           passout_year,
           bio
         `)
-        .neq('id', user.uid)
+        .neq('id', user.id)
         .or(`full_name.ilike.%${queryText}%,username.ilike.%${queryText}%,branch.ilike.%${queryText}%`)
         .limit(20);
 
@@ -353,7 +357,7 @@ export default function ChatList() {
       const transformedUsers = usersData?.map(userData => ({
         id: userData.id,
         userId: userData.id, // For compatibility
-        uid: userData.id, // For compatibility
+        // uid: userData.id, // For compatibility
         fullName: userData.full_name,
         full_name: userData.full_name,
         displayName: userData.full_name,
@@ -379,12 +383,23 @@ export default function ChatList() {
     }
   }, [user?.uid]);
 
-  // Search debouncing effect
+  // Search debouncing effect - fix: use 500ms debounce, only show results after user stops typing
   useEffect(() => {
     if (searchTimeout.current) {
       clearTimeout(searchTimeout.current);
     }
-    searchTimeout.current = setTimeout(() => handleSearch(searchQuery), 500);
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    searchTimeout.current = setTimeout(() => {
+      handleSearch(searchQuery);
+    }, 500); // 500ms debounce
+    return () => {
+      if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    };
   }, [searchQuery, handleSearch]);
 
   const deleteChat = async (chatId) => {
@@ -425,7 +440,7 @@ export default function ChatList() {
       const chatsRef = collection(db, 'chats');
       const q = query(
         chatsRef,
-        where('participants', 'array-contains', user.uid)
+        where('participants', 'array-contains', user.id)
       );
       const snapshot = await getDocs(q);
       
@@ -445,7 +460,7 @@ export default function ChatList() {
         console.log('🔥 Creating new chat with recipient:', recipientId);
         
         const newChatData = {
-          participants: [user.uid, recipientId],
+          participants: [user.id, recipientId],
           createdAt: serverTimestamp(),
           lastMessageTime: serverTimestamp(),
           lastMessage: null,
@@ -477,7 +492,7 @@ export default function ChatList() {
       networkErrorHandler.showErrorToUser(error);
       Alert.alert('Error', 'Failed to navigate to chat');
     }
-  }, [user.uid, loadChats]);
+  }, [user.id, loadChats]);
 
   const handleChatNavigation = useCallback(async (recipientId) => {
     try {
@@ -489,7 +504,7 @@ export default function ChatList() {
       const chatsRef = collection(db, 'chats');
       const q = query(
         chatsRef,
-        where('participants', 'array-contains', user.uid)
+        where('participants', 'array-contains', user.id)
       );
       const snapshot = await getDocs(q);
       
@@ -507,7 +522,7 @@ export default function ChatList() {
         });
       } else {
         const newChatRef = await addDoc(chatsRef, {
-          participants: [user.uid, recipientId],
+          participants: [user.id, recipientId],
           createdAt: new Date(),
           lastMessageTime: new Date(),
           lastMessage: null
@@ -526,7 +541,7 @@ export default function ChatList() {
       networkErrorHandler.showErrorToUser(error);
       Alert.alert('Error', 'Failed to navigate to chat');
     }
-  }, [user.uid]);
+  }, [user.id]);
 
   const formatTime = (timestamp) => {
     if (!timestamp) return '';
@@ -545,9 +560,9 @@ export default function ChatList() {
   const Header = () => (
     <View style={{
       backgroundColor: COLORS.headerBg,
-      paddingTop: 60,
-      paddingBottom: 20,
-      paddingHorizontal: 20,
+      paddingTop: verticalScale(60),
+      paddingBottom: verticalScale(20),
+      paddingHorizontal: scaleSize(20),
       borderBottomWidth: 1,
       borderBottomColor: COLORS.separator,
       shadowColor: COLORS.shadow,
@@ -563,7 +578,7 @@ export default function ChatList() {
       }}>
         {/* Chat Title */}
         <AppText style={{
-          fontSize: 34,
+          fontSize: scaleSize(34),
           fontFamily: Fonts.GeneralSans.Bold,
           color: COLORS.textPrimary,
           letterSpacing: 0.4,
@@ -572,14 +587,14 @@ export default function ChatList() {
         </AppText>
         
         {/* Action Buttons */}
-        <View style={{ flexDirection: 'row', gap: 12 }}>
+        <View style={{ flexDirection: 'row', gap: scaleSize(12) }}>
           {/* New Chat Button */}
           <TouchableOpacity
             onPress={() => setShowNewChatModal(true)}
             style={{
-              width: 44,
-              height: 44,
-              borderRadius: 22,
+              width: scaleSize(44),
+              height: scaleSize(44),
+              borderRadius: scaleSize(22),
               backgroundColor: COLORS.primary,
               justifyContent: 'center',
               alignItems: 'center',
@@ -590,7 +605,7 @@ export default function ChatList() {
               elevation: 3,
             }}
           >
-            <Ionicons name="create-outline" size={22} color={COLORS.background} />
+            <Ionicons name="create-outline" size={scaleSize(22)} color={COLORS.background} />
           </TouchableOpacity>
         </View>
       </View>
@@ -601,30 +616,30 @@ export default function ChatList() {
   const SearchBar = () => (
     <View style={{
       backgroundColor: COLORS.background,
-      paddingHorizontal: 20,
-      paddingVertical: 16,
+      paddingHorizontal: scaleSize(20),
+      paddingVertical: verticalScale(16),
     }}>
       <View style={{
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: COLORS.searchBackground,
-        borderRadius: 16,
-        paddingHorizontal: 16,
-        paddingVertical: 12,
+        borderRadius: scaleSize(16),
+        paddingHorizontal: scaleSize(16),
+        paddingVertical: verticalScale(12),
         borderWidth: 1,
         borderColor: COLORS.border,
         shadowColor: COLORS.shadow,
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 1,
-        shadowRadius: 2,
+        shadowRadius: scaleSize(2),
         elevation: 1,
       }}>
-        <Ionicons name="search-outline" size={20} color={COLORS.textSecondary} />
+        <Ionicons name="search-outline" size={scaleSize(20)} color={COLORS.textSecondary} />
         <TextInput
           style={{
             flex: 1,
-            marginLeft: 12,
-            fontSize: 16,
+            marginLeft: scaleSize(12),
+            fontSize: scaleSize(16),
             color: COLORS.textPrimary,
             fontFamily: 'System',
             letterSpacing: 0.3,
@@ -638,7 +653,7 @@ export default function ChatList() {
           <ActivityIndicator size="small" color={COLORS.primary} />
         ) : searchQuery ? (
           <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Ionicons name="close-circle" size={20} color={COLORS.textSecondary} />
+            <Ionicons name="close-circle" size={scaleSize(20)} color={COLORS.textSecondary} />
           </TouchableOpacity>
         ) : null}
       </View>
@@ -703,22 +718,22 @@ export default function ChatList() {
           onPressOut={handlePressOut}
           style={{
             backgroundColor: hasUnread ? COLORS.unreadBackground : COLORS.background,
-            paddingVertical: 16,
-            paddingHorizontal: 20,
-            marginHorizontal: 4,
-            marginVertical: 2,
-            borderRadius: 12,
-            minHeight: 80,
+            paddingVertical: verticalScale(16),
+            paddingHorizontal: scaleSize(20),
+            marginHorizontal: scaleSize(4),
+            marginVertical: verticalScale(2),
+            borderRadius: scaleSize(12),
+            minHeight: verticalScale(80),
             flexDirection: 'row',
             alignItems: 'center',
           }}
         >
           {/* Profile Avatar with online indicator */}
-          <View style={{ position: 'relative', marginRight: 16 }}>
+          <View style={{ position: 'relative', marginRight: scaleSize(16) }}>
                          <View style={{
-               width: 56,
-               height: 56,
-               borderRadius: 28,
+               width: scaleSize(56),
+               height: scaleSize(56),
+               borderRadius: scaleSize(28),
                backgroundColor: COLORS.secondaryBackground,
                justifyContent: 'center',
                alignItems: 'center',
@@ -727,7 +742,7 @@ export default function ChatList() {
              }}>
                <Text style={{
                  color: COLORS.textPrimary,
-                 fontSize: 20,
+                 fontSize: scaleSize(20),
                  fontFamily: Fonts.GeneralSans.Bold,
                  letterSpacing: -0.3,
                }}>
@@ -737,11 +752,11 @@ export default function ChatList() {
             {item.recipient?.online && (
               <View style={{
                 position: 'absolute',
-                bottom: 2,
+                bottom: verticalScale(2),
                 right: 0,
-                width: 16,
-                height: 16,
-                borderRadius: 8,
+                width: scaleSize(16),
+                height: scaleSize(16),
+                borderRadius: scaleSize(8),
                 backgroundColor: COLORS.success,
                 borderWidth: 2,
                 borderColor: COLORS.background,
@@ -756,10 +771,10 @@ export default function ChatList() {
               flexDirection: 'row',
               justifyContent: 'space-between',
               alignItems: 'center',
-              marginBottom: 6,
+              marginBottom: verticalScale(6),
             }}>
               <AppText style={{
-                fontSize: 17,
+                fontSize: scaleSize(17),
                 fontFamily: hasUnread ? Fonts.GeneralSans.Bold : Fonts.GeneralSans.Semibold,
                 color: COLORS.textPrimary,
                 letterSpacing: 0.3,
@@ -769,11 +784,11 @@ export default function ChatList() {
               </AppText>
               
               <AppText style={{
-                fontSize: 14,
+                fontSize: scaleSize(14),
                 color: hasUnread ? COLORS.primary : COLORS.textSecondary,
                 letterSpacing: 0.2,
                 fontFamily: hasUnread ? Fonts.GeneralSans.Semibold : Fonts.GeneralSans.Regular,
-                marginLeft: 8,
+                marginLeft: scaleSize(8),
               }}>
                 {formatTime(item.lastMessageTime)}
               </AppText>
@@ -790,10 +805,10 @@ export default function ChatList() {
                 style={{
                   color: hasUnread ? COLORS.textPrimary : COLORS.textSecondary,
                   flex: 1,
-                  fontSize: 15,
+                  fontSize: scaleSize(15),
                   letterSpacing: 0.2,
                   fontFamily: hasUnread ? Fonts.GeneralSans.Medium : Fonts.GeneralSans.Regular,
-                  marginRight: 12,
+                  marginRight: scaleSize(12),
                 }}
                 numberOfLines={1}
               >
@@ -801,26 +816,26 @@ export default function ChatList() {
               </AppText>
               
               {/* Unread Count Badge and Status Icons */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: scaleSize(8) }}>
                 {/* Double tick for seen messages */}
                 {!hasUnread && item.lastMessage && (
-                  <Ionicons name="checkmark-done" size={16} color={COLORS.primary} />
+                  <Ionicons name="checkmark-done" size={scaleSize(16)} color={COLORS.primary} />
                 )}
                 
                 {/* Unread Count Badge */}
                 {hasUnread && (
                   <View style={{
                     backgroundColor: COLORS.primary,
-                    borderRadius: 12,
-                    minWidth: 24,
-                    height: 24,
+                    borderRadius: scaleSize(12),
+                    minWidth: scaleSize(24),
+                    height: scaleSize(24),
                     justifyContent: 'center',
                     alignItems: 'center',
-                    paddingHorizontal: 8,
+                    paddingHorizontal: scaleSize(8),
                   }}>
                     <AppText style={{
                       color: COLORS.background,
-                      fontSize: 12,
+                      fontSize: scaleSize(12),
                       fontFamily: Fonts.GeneralSans.Semibold,
                     }}>
                       {item.unreadcount > 99 ? '99+' : item.unreadcount}
@@ -851,22 +866,22 @@ export default function ChatList() {
       }}>
         <View style={{
           backgroundColor: COLORS.background,
-          borderRadius: 20,
-          padding: 24,
+          borderRadius: scaleSize(20),
+          padding: scaleSize(24),
           width: '85%',
-          maxWidth: 320,
+          maxWidth: scaleSize(320),
           shadowColor: COLORS.shadow,
-          shadowOffset: { width: 0, height: 8 },
+          shadowOffset: { width: 0, height: scaleSize(8) },
           shadowOpacity: 1,
-          shadowRadius: 16,
+          shadowRadius: scaleSize(16),
           elevation: 8,
         }}>
           <AppText style={{
-            fontSize: 20,
+            fontSize: scaleSize(20),
             fontFamily: Fonts.GeneralSans.Semibold,
             color: COLORS.textPrimary,
             textAlign: 'center',
-            marginBottom: 12,
+            marginBottom: scaleSize(12),
             letterSpacing: 0.3
           }}>
             Delete Chat
@@ -874,21 +889,21 @@ export default function ChatList() {
           <AppText style={{
             color: COLORS.textSecondary,
             textAlign: 'center',
-            marginBottom: 24,
-            lineHeight: 20,
+            marginBottom: scaleSize(24),
+            lineHeight: scaleSize(20),
             letterSpacing: 0.2
           }}>
             Are you sure you want to delete this chat? This action cannot be undone.
           </AppText>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: scaleSize(12) }}>
             <TouchableOpacity
               onPress={() => setShowDeleteModal(false)}
               style={{
-                padding: 16,
+                padding: scaleSize(16),
                 flex: 1,
                 alignItems: 'center',
                 backgroundColor: COLORS.searchBackground,
-                borderRadius: 12,
+                borderRadius: scaleSize(12),
               }}
             >
               <AppText style={{ color: COLORS.textPrimary, fontFamily: Fonts.GeneralSans.Semibold, letterSpacing: 0.3 }}>Cancel</AppText>
@@ -896,11 +911,11 @@ export default function ChatList() {
             <TouchableOpacity
               onPress={() => deleteChat(selectedChat?.id)}
               style={{
-                padding: 16,
+                padding: scaleSize(16),
                 flex: 1,
                 alignItems: 'center',
                 backgroundColor: '#DC2626',
-                borderRadius: 12,
+                borderRadius: scaleSize(12),
               }}
             >
               <AppText style={{ color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Semibold, letterSpacing: 0.3 }}>Delete</AppText>
@@ -909,6 +924,27 @@ export default function ChatList() {
         </View>
       </View>
     </Modal>
+  );
+
+  useFocusEffect(
+    React.useCallback(() => {
+      let isActive = true;
+      const fetchUser = async () => {
+        const { data: { user: supaUser } } = await supabase.auth.getUser();
+        if (supaUser && isActive) {
+          const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', supaUser.id)
+            .single();
+          if (data && isActive) {
+            setUser(data);
+          }
+        }
+      };
+      fetchUser();
+      return () => { isActive = false; };
+    }, [])
   );
 
   return (
@@ -921,14 +957,13 @@ export default function ChatList() {
           justifyContent: 'center', 
           alignItems: 'center' 
         }}>
-          <ActivityIndicator size="large" color={COLORS.accent} />
-          <AppText style={{ 
-            color: COLORS.textSecondary, 
-            marginTop: 16, 
-            fontSize: 16 
-          }}>
-            Loading user data...
-          </AppText>
+          <View style={{ alignItems: 'center', marginBottom: 24 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center' }}>
+              <Text style={{ fontSize: scaleSize(32), color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Medium, marginRight: 2, letterSpacing: -1 }}>social</Text>
+              <Text style={{ fontSize: scaleSize(44), color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Bold, letterSpacing: -2 }}>z.</Text>
+            </View>
+            <Text style={{ color: '#A1A1AA', fontSize: scaleSize(18), marginTop: 8, fontFamily: Fonts.GeneralSans.Medium }}>Loading...</Text>
+          </View>
         </View>
       ) : (
         <>
@@ -940,8 +975,8 @@ export default function ChatList() {
         keyExtractor={item => item.id}
         renderItem={({ item }) => <ChatItem item={item} />}
         contentContainerStyle={{
-          paddingTop: 8,
-          paddingBottom: 100,
+          paddingTop: verticalScale(8),
+          paddingBottom: verticalScale(100),
         }}
         refreshing={loading}
         onRefresh={loadChats}
@@ -951,31 +986,31 @@ export default function ChatList() {
             flex: 1,
             justifyContent: 'center',
             alignItems: 'center',
-            padding: 40,
-            marginTop: 80,
+            padding: scaleSize(40),
+            marginTop: verticalScale(80),
             backgroundColor: 'rgba(0,0,0,0.7)',
-            borderRadius: 24,
+            borderRadius: scaleSize(24),
             overflow: 'hidden',
           }}>
-            <Ionicons name="chatbubbles-outline" size={64} color={COLORS.textTertiary} />
+            <Ionicons name="chatbubbles-outline" size={scaleSize(64)} color={COLORS.textTertiary} />
             <AppText style={{
               color: COLORS.textSecondary,
               textAlign: 'center',
-              fontSize: 18,
+              fontSize: scaleSize(18),
               fontFamily: Fonts.GeneralSans.Medium,
               letterSpacing: 0.3,
-              lineHeight: 24,
-              marginTop: 16,
+              lineHeight: scaleSize(24),
+              marginTop: verticalScale(16),
             }}>
               No conversations yet
             </AppText>
             <AppText style={{
               color: COLORS.textTertiary,
               textAlign: 'center',
-              fontSize: 16,
+              fontSize: scaleSize(16),
               letterSpacing: 0.2,
-              lineHeight: 20,
-              marginTop: 8,
+              lineHeight: scaleSize(20),
+              marginTop: verticalScale(8),
             }}>
               Start chatting with your friends!
             </AppText>
@@ -994,9 +1029,9 @@ export default function ChatList() {
           <View style={{
             flexDirection: 'row',
             alignItems: 'center',
-            paddingTop: 60,
-            paddingHorizontal: 20,
-            paddingBottom: 20,
+            paddingTop: verticalScale(60),
+            paddingHorizontal: scaleSize(20),
+            paddingBottom: verticalScale(20),
             borderBottomWidth: 1,
             borderBottomColor: COLORS.separator,
             backgroundColor: COLORS.background,
@@ -1004,20 +1039,20 @@ export default function ChatList() {
             <TouchableOpacity 
               onPress={() => setShowNewChatModal(false)}
               style={{ 
-                marginRight: 16,
-                width: 44,
-                height: 44,
-                borderRadius: 22,
+                marginRight: scaleSize(16),
+                width: scaleSize(44),
+                height: scaleSize(44),
+                borderRadius: scaleSize(22),
                 backgroundColor: COLORS.searchBackground,
                 justifyContent: 'center',
                 alignItems: 'center',
               }}
             >
-              <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
+              <Ionicons name="arrow-back" size={scaleSize(24)} color={COLORS.textPrimary} />
             </TouchableOpacity>
             
             <AppText style={{
-              fontSize: 20,
+              fontSize: scaleSize(20),
               fontFamily: Fonts.GeneralSans.Semibold,
               color: COLORS.textPrimary,
               letterSpacing: 0.3,
@@ -1027,25 +1062,25 @@ export default function ChatList() {
             </AppText>
           </View>
 
-          <View style={{ paddingHorizontal: 20, paddingVertical: 16 }}>
+          <View style={{ paddingHorizontal: scaleSize(20), paddingVertical: verticalScale(16) }}>
             <View style={{
               flexDirection: 'row',
               alignItems: 'center',
               backgroundColor: COLORS.searchBackground,
-              borderRadius: 16,
-              paddingHorizontal: 16,
-              paddingVertical: 12,
+              borderRadius: scaleSize(16),
+              paddingHorizontal: scaleSize(16),
+              paddingVertical: verticalScale(12),
               borderWidth: 1,
               borderColor: COLORS.border,
             }}>
-              <Ionicons name="search" size={20} color={COLORS.textSecondary} />
+              <Ionicons name="search" size={scaleSize(20)} color={COLORS.textSecondary} />
               <TextInput
                 style={{
                   flex: 1,
-                  marginLeft: 12,
-                  fontSize: 16,
+                  marginLeft: scaleSize(12),
+                  fontSize: scaleSize(16),
                   color: COLORS.textPrimary,
-                  paddingVertical: 4
+                  paddingVertical: verticalScale(4)
                 }}
                 placeholder="Search users..."
                 placeholderTextColor={COLORS.textSecondary}
@@ -1055,7 +1090,7 @@ export default function ChatList() {
               />
               {searchQuery ? (
                 <TouchableOpacity onPress={() => setSearchQuery('')}>
-                  <Ionicons name="close-circle" size={20} color={COLORS.textSecondary} />
+                  <Ionicons name="close-circle" size={scaleSize(20)} color={COLORS.textSecondary} />
                 </TouchableOpacity>
               ) : null}
             </View>
@@ -1077,15 +1112,15 @@ export default function ChatList() {
                   }}
                   style={{
                     flexDirection: 'row',
-                    padding: 20,
+                    padding: scaleSize(20),
                     alignItems: 'center',
                     borderBottomWidth: 1,
                     borderBottomColor: COLORS.separator,
                     backgroundColor: COLORS.background,
-                    marginHorizontal: 4,
-                    marginVertical: 2,
-                    borderRadius: 12,
-                    minHeight: 80,
+                    marginHorizontal: scaleSize(4),
+                    marginVertical: verticalScale(2),
+                    borderRadius: scaleSize(12),
+                    minHeight: verticalScale(80),
                   }}
                 >
                   <Image
@@ -1095,29 +1130,29 @@ export default function ChatList() {
                         : { uri: DEFAULT_PROFILE }
                     }
                     style={{
-                      width: 56,
-                      height: 56,
-                      borderRadius: 28,
+                      width: scaleSize(56),
+                      height: scaleSize(56),
+                      borderRadius: scaleSize(28),
                       backgroundColor: COLORS.searchBackground,
                       borderWidth: 1,
                       borderColor: COLORS.border,
-                      marginRight: 16,
+                      marginRight: scaleSize(16),
                     }}
                   />
                   <View style={{ flex: 1 }}>
                     <AppText style={{
-                      fontSize: 17,
+                      fontSize: scaleSize(17),
                       fontFamily: Fonts.GeneralSans.Semibold,
                       color: COLORS.textPrimary,
                       letterSpacing: 0.3,
-                      marginBottom: 4,
+                      marginBottom: verticalScale(4),
                     }}>
                       {item.fullName || 'Unknown User'}
                     </AppText>
                     {/* Display college name */}
                     {item.college && (
                       <AppText style={{
-                        fontSize: 15,
+                        fontSize: scaleSize(15),
                         color: COLORS.textSecondary,
                         letterSpacing: 0.2,
                       }}>
@@ -1129,24 +1164,24 @@ export default function ChatList() {
               )}
               ListEmptyComponent={
                 searchQuery.length > 0 ? (
-                  <View style={{ padding: 40, alignItems: 'center' }}>
-                    <Ionicons name="search-outline" size={48} color={COLORS.textTertiary} />
+                  <View style={{ padding: scaleSize(40), alignItems: 'center' }}>
+                    <Ionicons name="search-outline" size={scaleSize(48)} color={COLORS.textTertiary} />
                     <AppText style={{ 
                       color: COLORS.textSecondary, 
-                      fontSize: 16, 
-                      marginTop: 16,
+                      fontSize: scaleSize(16), 
+                      marginTop: verticalScale(16),
                       fontFamily: Fonts.GeneralSans.Medium 
                     }}>
                       No users found
                     </AppText>
                   </View>
                 ) : (
-                  <View style={{ padding: 40, alignItems: 'center' }}>
-                    <Ionicons name="people-outline" size={48} color={COLORS.textTertiary} />
+                  <View style={{ padding: scaleSize(40), alignItems: 'center' }}>
+                    <Ionicons name="people-outline" size={scaleSize(48)} color={COLORS.textTertiary} />
                     <AppText style={{ 
                       color: COLORS.textSecondary, 
-                      fontSize: 16, 
-                      marginTop: 16,
+                      fontSize: scaleSize(16), 
+                      marginTop: verticalScale(16),
                       fontFamily: Fonts.GeneralSans.Medium 
                     }}>
                       Search for users to chat with

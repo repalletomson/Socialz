@@ -2,9 +2,12 @@ import { useRouter } from 'expo-router';
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StatusBar, SafeAreaView } from 'react-native';
 import { AntDesign } from '@expo/vector-icons';
-import { useAuth } from '../../../context/authContext';
+import { useAuthStore } from '../../../stores/useAuthStore';
 import PersonalDetailsStep from './PersonalDetailsStep';
 import EducationDetailsStep from './EducationDetailsStep';
+import { TextStyles } from '../../../constants/Fonts';
+import { scaleSize, verticalScale } from '../../../utiles/common';
+import { supabase } from '../../../lib/supabase';
 
 // Updated black theme with purple accents
 const colors = {
@@ -39,10 +42,11 @@ export default function OnboardingScreen() {
     branch: '',
     passoutYear: '',
   });
-  const router = useRouter();
-  const { refreshAuthStates } = useAuth();
+  // const router = useRouter();
+  // const { isAuthenticated, updateProfileComplete, updateCollegeSelected } = useAuthStore();
   const mountedRef = useRef(true);
-
+  const { isAuthenticated, updateProfileComplete, updateCollegeSelected } = useAuthStore();
+  const router = useRouter();
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -68,111 +72,106 @@ export default function OnboardingScreen() {
     }
   };
 
-  const finishOnboarding = () => {
-    router.replace('/');
-  };
-
+  // const useFinishOnboarding = () => {
+   
+  
+    const finishOnboarding = async () => {
+      try {
+        console.log('🎉 Finishing onboarding...');
+        
+        // Update profile completion status in auth store
+        await updateProfileComplete(true);
+        await updateCollegeSelected(true);
+        
+        // Navigate to main app if authenticated
+        if (isAuthenticated) {
+          console.log('✅ Onboarding completed, navigating to home');
+          router.replace('/(root)/(tabs)/home');
+        } else {
+          console.warn('⚠️ User not authenticated, cannot navigate to home');
+          // Optionally redirect to login
+          router.replace('/(auth)/auth');
+        }
+        
+      } catch (error) {
+        console.error('❌ Error finishing onboarding:', error);
+        // Handle error appropriately
+      }
+    };
+  
+  //   return finishOnboarding;
+  // };
   const renderStepIndicator = () => (
     <View style={{
       flexDirection: 'row',
-      justifyContent: 'center',
       alignItems: 'center',
-      paddingHorizontal: 24,
-      paddingVertical: 20,
+      justifyContent: 'space-between',
+      paddingHorizontal: scaleSize(24),
+      paddingVertical: verticalScale(20),
       backgroundColor: colors.surface,
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
     }}>
       {/* Step 1 */}
-      <View style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-      }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}>
         <View style={{
-          width: 36,
-          height: 36,
-          borderRadius: 18,
+          width: scaleSize(36),
+          height: scaleSize(36),
+          borderRadius: scaleSize(18),
           backgroundColor: step >= 1 ? colors.stepActive : colors.stepInactive,
           justifyContent: 'center',
           alignItems: 'center',
+          marginRight: scaleSize(8),
           shadowColor: step >= 1 ? colors.stepActive : 'transparent',
           shadowOffset: { width: 0, height: 2 },
           shadowOpacity: step >= 1 ? 0.1 : 0,
-          shadowRadius: 6,
+          shadowRadius: scaleSize(6),
           elevation: step >= 1 ? 3 : 0,
         }}>
           {step > 1 ? (
-            <AntDesign name="check" size={20} color={colors.accentText} />
+            <AntDesign name="check" size={scaleSize(20)} color={colors.accentText} />
           ) : (
-            <Text style={{
-              color: step >= 1 ? colors.accentText : colors.stepTextInactive,
-              fontSize: 16,
-              fontWeight: '700',
-            }}>
-              1
-            </Text>
+            <Text style={TextStyles.body1}>1</Text>
           )}
         </View>
-        <Text style={{
-          color: step >= 1 ? colors.stepText : colors.stepTextInactive,
-          fontSize: 15,
-          fontWeight: '600',
-          marginLeft: 12,
-          letterSpacing: -0.2,
-        }}>
+        <Text style={[TextStyles.body2, { color: step >= 1 ? colors.stepText : colors.stepTextInactive, flexShrink: 1 }]} numberOfLines={1}>
           Personal Details
         </Text>
       </View>
 
       {/* Connector Line */}
       <View style={{
-        height: 3,
-        flex: 0.3,
+        height: scaleSize(3),
+        width: scaleSize(40),
         backgroundColor: step >= 2 ? colors.stepActive : colors.stepInactive,
-        marginHorizontal: 16,
-        borderRadius: 1.5,
+        marginHorizontal: scaleSize(8),
+        borderRadius: scaleSize(1.5),
+        alignSelf: 'center',
       }} />
 
       {/* Step 2 */}
-      <View style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-        justifyContent: 'flex-end',
-      }}>
-        <Text style={{
-          color: step >= 2 ? colors.stepText : colors.stepTextInactive,
-          fontSize: 15,
-          fontWeight: '600',
-          marginRight: 12,
-          letterSpacing: -0.2,
-        }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, justifyContent: 'flex-end' }}>
+        <Text style={[TextStyles.body2, { color: step >= 2 ? colors.stepText : colors.stepTextInactive, flexShrink: 1, textAlign: 'right' }]} numberOfLines={1}>
           Education Details
         </Text>
         <View style={{
-          width: 36,
-          height: 36,
-          borderRadius: 18,
+          width: scaleSize(36),
+          height: scaleSize(36),
+          borderRadius: scaleSize(18),
           backgroundColor: step >= 2 ? colors.stepActive : colors.stepInactive,
           justifyContent: 'center',
           alignItems: 'center',
+          marginLeft: scaleSize(8),
           shadowColor: step >= 2 ? colors.stepActive : 'transparent',
           shadowOffset: { width: 0, height: 2 },
           shadowOpacity: step >= 2 ? 0.1 : 0,
-          shadowRadius: 6,
+          shadowRadius: scaleSize(6),
           elevation: step >= 2 ? 3 : 0,
         }}>
           {step > 2 ? (
-            <AntDesign name="check" size={20} color={colors.accentText} />
+            <AntDesign name="check" size={scaleSize(20)} color={colors.accentText} />
           ) : (
-            <Text style={{
-              color: step >= 2 ? colors.accentText : colors.stepTextInactive,
-              fontSize: 16,
-              fontWeight: '700',
-            }}>
-              2
-            </Text>
+            <Text style={TextStyles.body1}>2</Text>
           )}
         </View>
       </View>
@@ -222,4 +221,4 @@ export default function OnboardingScreen() {
       </View>
     </SafeAreaView>
   );
-} 
+}

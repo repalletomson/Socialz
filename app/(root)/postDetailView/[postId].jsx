@@ -18,7 +18,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import { supabase } from '../../../config/supabaseConfig';
-import { useAuth } from '../../../context/authContext';
+import { useAuthStore } from '../../../stores/useAuthStore';
 import {
   addComment,
   getComments,
@@ -44,6 +44,7 @@ import networkErrorHandler from '../../../utiles/networkErrorHandler';
 import { updateStreakForComment } from '../../../(apis)/streaks';
 import StreakCelebrationModal from '../../../components/StreakCelebrationModal';
 import { Fonts, TextStyles } from '../../../constants/Fonts';
+import EventEmitter from '../../../utiles/EventEmitter';
 
 const COLORS = {
   background: '#000000',
@@ -67,7 +68,7 @@ function getAnonPseudonym(userId, postId) {
   }
   // Convert hash to base36 and take last 2 chars
   const code = Math.abs(hash).toString(36).slice(-2);
-  return `anonymous-${code}`;
+  return `incognitoUser-${code}`;
 }
 
 // Add this function for color-coding pseudonyms
@@ -83,7 +84,7 @@ function getColorFromPseudonym(pseudonym) {
 export default function PostDetailView() {
   const { postId } = useLocalSearchParams();
   const router = useRouter();  
-  const { user } = useAuth();  
+  const { user } = useAuthStore();  
   const [post, setPost] = useState(null);
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
@@ -132,8 +133,30 @@ export default function PostDetailView() {
     return topLevelComments;
   };
 
+  // Move fetchComments out of useEffect and define it as a function:
+  const fetchComments = async () => {
+    try {
+      console.log('💬 Fetching comments for post:', postId);
+      const { data: commentsData, error } = await supabase
+        .from('comments')
+        .select('*')
+        .eq('post_id', postId)
+        .order('created_at', { ascending: true });
+      if (error) {
+        console.error('❌ Error fetching comments:', error);
+        networkErrorHandler.showErrorToUser(error);
+        return;
+      }
+      if (commentsData) {
+        setComments(commentsData);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching comments:', error);
+    }
+  };
+
   useEffect(() => {
-    console.log('🔗 Setting up PostDetailView for post:', postId, 'user:', user?.uid);
+    console.log('🔗 Setting up PostDetailView for post:', postId, 'user:', user?.id);
     
     const fetchPostDetails = async () => {
       try {
@@ -175,11 +198,11 @@ export default function PostDetailView() {
           setCommentCount(postData.comment_count || 0);
           
           // Check user's like and save status efficiently
-          if (user?.uid) {
-            const userLiked = await hasUserLiked(postId, user.uid);
+          if (user?.id) {
+            const userLiked = await hasUserLiked(postId, user.id);
             setIsLiked(userLiked);
             
-            const userSaved = await hasUserSaved(postId, user.uid);
+            const userSaved = await hasUserSaved(postId, user.id);
             setIsSaved(userSaved);
           } else {
             setIsLiked(false);
@@ -191,47 +214,6 @@ export default function PostDetailView() {
       }
     };
 
-    const fetchComments = async () => {
-      try {
-        console.log('💬 Fetching comments for post:', postId);
-        
-        const { data: commentsData, error } = await supabase
-          .from('comments')
-          .select('*')
-          .eq('post_id', postId)
-          .order('created_at', { ascending: true });
-        
-        if (error) {
-          console.error('❌ Error fetching comments:', error);
-          networkErrorHandler.showErrorToUser(error);
-          return;
-        }
-        
-        console.log('✅ Comments loaded:', commentsData?.length || 0);
-        console.log('💬 Raw comments data:', commentsData);
-        
-        // Debug each comment
-        if (commentsData && commentsData.length > 0) {
-          commentsData.forEach((comment, index) => {
-            console.log(`Comment ${index}:`, {
-              id: comment.id,
-              content: comment.content,
-              user_name: comment.user_name,
-              created_at: comment.created_at,
-              parent_comment_id: comment.parent_comment_id
-            });
-          });
-        }
-        
-        // Organize comments into hierarchical structure
-        const organizedComments = organizeComments(commentsData || []);
-        console.log('🏗️ Organized comments:', organizedComments.length, 'top-level comments');
-        setComments(organizedComments);
-      } catch (error) {
-        console.error('❌ Error fetching comments:', error);
-      }
-    };
-
     fetchPostDetails();
     fetchComments();
     
@@ -240,7 +222,7 @@ export default function PostDetailView() {
       .channel(`comments-${postId}`, {
         config: {
           broadcast: { self: true },
-          presence: { key: user?.uid }
+          presence: { key: user?.id }
         }
       })
       .on('postgres_changes', 
@@ -299,7 +281,7 @@ export default function PostDetailView() {
             .from('likes')
             .select('id')
             .eq('post_id', postId)
-            .eq('user_id', user?.uid);
+            .eq('user_id', user?.id);
           
           if (!likeError) {
             setIsLiked(likeData && likeData.length > 0);
@@ -323,7 +305,7 @@ export default function PostDetailView() {
       supabase.removeChannel(commentsChannel);
       supabase.removeChannel(likesChannel);
     };
-  }, [postId, user?.uid]);
+  }, [postId, user?.id]);
 
   const formatTimestamp = (timestamp) => {
     try {
@@ -395,7 +377,7 @@ export default function PostDetailView() {
 
   // Update renderCommentItem to remove left margin for replies, decrease text size, and color-code anonymous avatars
   const renderCommentItem = (item, isReply = false) => {
-    const isOwnComment = (item.user_id) === user?.uid;
+    const isOwnComment = (item.user_id) === user?.id;
     const userName = item.user_name || 'Anonymous';
     const content = item.content || '';
     const isAnonymousUser = item.is_anonymous;
@@ -467,7 +449,7 @@ export default function PostDetailView() {
           .from('likes')
           .delete()
           .eq('post_id', post.id)
-          .eq('user_id', user.uid);
+          .eq('user_id', user.id);
           
         if (error) {
           console.error('❌ Error removing like:', error);
@@ -485,7 +467,7 @@ export default function PostDetailView() {
           .from('likes')
           .insert({
             post_id: post.id,
-            user_id: user.uid,
+            user_id: user.id,
             created_at: new Date().toISOString()
           });
           
@@ -533,13 +515,13 @@ export default function PostDetailView() {
     try {
       if (isSaved) {
         // User wants to unsave
-        const result = await unsavePost(post.id, user.uid);
+        const result = await unsavePost(post.id, user.id);
         if (result !== false) {
           setIsSaved(false);
         }
       } else {
         // User wants to save
-        const result = await savePost(post.id, user.uid);
+        const result = await savePost(post.id, user.id);
         
         // Check if save was actually added (result will be null if already saved)
         if (result !== null) {
@@ -581,10 +563,10 @@ export default function PostDetailView() {
       
       const commentData = {
         post_id: postId,
-        user_id: user.uid,
+        user_id: user.id,
         parent_comment_id: replyingTo?.id || null,
         content: newComment.trim(),
-        user_name: isAnonymous ? getAnonPseudonym(user.uid, postId) : user.full_name || user.name || 'User',
+        user_name: isAnonymous ? getAnonPseudonym(user.id, postId) : user.full_name || user.name || 'User',
         user_avatar: isAnonymous ? null : user.profile_image || user.avatar,
         is_anonymous: isAnonymous,
         created_at: new Date().toISOString(),
@@ -623,11 +605,10 @@ export default function PostDetailView() {
       // Update streak for commenting on other users' posts
       try {
         console.log('🔥 Updating streak for comment...');
-        const streakResult = await updateStreakForComment(user.uid, post.user_id || post.userId);
+        const streakResult = await updateStreakForComment(user.id, post.user_id || post.userId);
         
         if (streakResult.streakIncreased) {
           console.log(`🎉 Streak increased to ${streakResult.current_streak}!`);
-          
           // Show beautiful celebration modal
           setCelebrationData({
             streakCount: streakResult.current_streak,
@@ -635,7 +616,12 @@ export default function PostDetailView() {
             isFirstStreak: streakResult.current_streak === 1 && streakResult.previousStreak === 0
           });
           setShowCelebration(true);
-          
+          // Emit event for Home page
+          EventEmitter.emit('streak-achieved', {
+            streakCount: streakResult.current_streak,
+            previousStreak: streakResult.previousStreak,
+            isFirstStreak: streakResult.current_streak === 1 && streakResult.previousStreak === 0
+          });
         } else if (streakResult.commentsProgress) {
           console.log(`💬 Comment progress: ${streakResult.commentsProgress}/5`);
           // Optional: Show progress toast
@@ -691,7 +677,12 @@ export default function PostDetailView() {
           <TouchableOpacity onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={24} color={COLORS.text} />
           </TouchableOpacity>
-          {/* <Text style={{ color: COLORS.text, fontSize: 20, fontWeight: '700' }}>Post</Text> */}
+          <View style={{ flex: 1, alignItems: 'center', position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, justifyContent: 'center', pointerEvents: 'none' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center' }}>
+              <Text style={{ fontSize: 16, color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Medium, marginRight: 2, letterSpacing: -1 }}>social</Text>
+              <Text style={{ fontSize: 24, color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Bold, letterSpacing: -2 }}>z.</Text>
+            </View>
+          </View>
           <View style={{ width: 24 }} />
         </View>
 
@@ -713,19 +704,20 @@ export default function PostDetailView() {
             elevation: 8,
           }}>
             {/* User Header */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', padding: 20, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.inputBg }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', padding: 20, backgroundColor: COLORS.cardBg }}>
               <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.inputBg, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: COLORS.accent, marginRight: 8 }}>
                 <Text style={{ color: COLORS.text, fontSize: 16, fontWeight: '800' }}>
                   {(post?.userName || 'A').charAt(0).toUpperCase()}
                 </Text>
               </View>
-              <Text style={{ color: COLORS.text, fontSize: 16, fontFamily: Fonts.GeneralSans.Bold }}>
-                {post?.userName || 'Anonymous'}
-              </Text>
-              <View style={{ flex: 1 }} />
-              <TouchableOpacity onPress={() => setCommentOptions({ id: post.id, isOwn: post.userId === user?.uid })} style={{ padding: 4 }}>
-                <Ionicons name="ellipsis-horizontal" size={22} color={COLORS.textSecondary} />
-              </TouchableOpacity>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: COLORS.text, fontSize: 16, fontFamily: Fonts.GeneralSans.Bold }}>
+                  {post?.username ? `@${post.username}` : 'Anonymous'}
+                </Text>
+                <Text style={{ color: COLORS.textMuted, fontSize: 13, fontFamily: Fonts.GeneralSans.Regular, marginTop: 2 }}>
+                  {formatTimestamp(post?.createdAt)}
+                </Text>
+              </View>
             </View>
 
             {/* Post Content */}
@@ -858,6 +850,24 @@ export default function PostDetailView() {
 
           {/* Comments Section */}
           <View style={{ paddingHorizontal: 20, backgroundColor: 'transparent' }}>
+            {/* Add a reload button above the comments section */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, marginTop: 12 }}>
+              <Text style={{ fontSize: 18, fontFamily: Fonts.GeneralSans.Bold, color: '#fff' }}></Text>
+              <TouchableOpacity
+                onPress={fetchComments}
+                style={{
+                  // backgroundColor: '#A259FF',
+                  borderRadius: 8,
+                  paddingHorizontal: 16,
+                  paddingVertical: 8,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                }}
+              >
+                <Ionicons name="reload" size={18} color="#fff" style={{ marginRight: 6 }} />
+                {/* <Text style={{ color: '#fff', fontFamily: Fonts.GeneralSans.Medium, fontSize: 15 }}></Text> */}
+              </TouchableOpacity>
+            </View>
             <Text style={{ 
               color: COLORS.text, 
               fontSize: 20, 

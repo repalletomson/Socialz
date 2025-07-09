@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../context/authContext';
+import { useAuthStore } from '../../stores/useAuthStore';
 import { deleteUserAccount } from '../../(apis)/user';
 import { supabase } from '../../config/supabaseConfig';
 import { Fonts } from '../../constants/Fonts';
@@ -28,7 +28,7 @@ const COLORS = {
 export default function TestDeletePage() {
   const [testResults, setTestResults] = useState([]);
   const [testing, setTesting] = useState(false);
-  const { user } = useAuth();
+  const { user } = useAuthStore();
   const router = useRouter();
 
   const addTestResult = (test, success, message) => {

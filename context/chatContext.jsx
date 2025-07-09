@@ -9,12 +9,12 @@ import {
   getDoc,
   doc
 } from 'firebase/firestore';
-import { useAuth } from './authContext';
+import { useAuthStore } from '../stores/useAuthStore';
 
 const ChatContext = createContext({});
 
 export function ChatProvider({ children }) {
-  const { user } = useAuth();
+  const { user } = useAuthStore();
   const [chats, setChats] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);

@@ -95,7 +95,7 @@ class ErrorBoundary extends Component {
         return (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#8B5CF6" />
-            <Text style={styles.loadingText}>Loading...</Text>
+            <Text style={styles.loadingText}>PLease wait !! App is Loading...</Text>
           </View>
         );
       }

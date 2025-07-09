@@ -29,7 +29,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../config/firebaseConfig";
 import { AES, enc } from "react-native-crypto-js";
-import { useAuth } from "../context/authContext";
+import { useAuthStore } from '../stores/useAuthStore';
 
 // Modern black theme colors
 const COLORS = {
@@ -86,7 +86,7 @@ export const MessageInput = React.memo(
     scrollToBottom,
     disappearingMessages,
   }) => {
-    const { user } = useAuth();
+    const { user } = useAuthStore();
     const [message, setMessage] = useState("");
     const [sending, setSending] = useState(false);
     const [inputHeight, setInputHeight] = useState(36);

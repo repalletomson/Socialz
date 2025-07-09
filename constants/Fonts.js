@@ -1,3 +1,5 @@
+import { scaleSize } from '../utiles/common';
+
 // Font configuration for GeneralSans
 export const Fonts = {
   GeneralSans: {
@@ -71,80 +73,94 @@ export const TextStyles = {
   // Headings
   h1: {
     fontFamily: Fonts.GeneralSans.Bold,
-    fontSize: 32,
-    lineHeight: 40,
+    fontSize: scaleSize(28),
+    lineHeight: scaleSize(40),
+    color: '#FFFFFF',
   },
   h2: {
     fontFamily: Fonts.GeneralSans.Bold,
-    fontSize: 28,
-    lineHeight: 36,
+    fontSize: scaleSize(22),
+    lineHeight: scaleSize(36),
+    color: '#FFFFFF',
   },
   h3: {
     fontFamily: Fonts.GeneralSans.Semibold,
-    fontSize: 24,
-    lineHeight: 32,
+    fontSize: scaleSize(24),
+    lineHeight: scaleSize(32),
+    color: '#FFFFFF',
   },
   h4: {
     fontFamily: Fonts.GeneralSans.Semibold,
-    fontSize: 20,
-    lineHeight: 28,
+    fontSize: scaleSize(20),
+    lineHeight: scaleSize(28),
+    color: '#FFFFFF',
   },
   h5: {
     fontFamily: Fonts.GeneralSans.Medium,
-    fontSize: 18,
-    lineHeight: 26,
+    fontSize: scaleSize(18),
+    lineHeight: scaleSize(26),
+    color: '#FFFFFF',
   },
   h6: {
     fontFamily: Fonts.GeneralSans.Medium,
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: scaleSize(16),
+    lineHeight: scaleSize(24),
+    color: '#FFFFFF',
   },
   
   // Body text
   body1: {
     fontFamily: Fonts.GeneralSans.Regular,
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: scaleSize(16),
+    lineHeight: scaleSize(24),
+    color: '#FFFFFF',
   },
   body2: {
     fontFamily: Fonts.GeneralSans.Regular,
-    fontSize: 14,
-    lineHeight: 22,
+    fontSize: scaleSize(14),
+    lineHeight: scaleSize(22),
+    color: '#FFFFFF',
   },
   body3: {
     fontFamily: Fonts.GeneralSans.Light,
-    fontSize: 14,
-    lineHeight: 22,
+    fontSize: scaleSize(14),
+    lineHeight: scaleSize(22),
+    color: '#FFFFFF',
   },
   
   // Labels and captions
   label: {
     fontFamily: Fonts.GeneralSans.Medium,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: scaleSize(14),
+    lineHeight: scaleSize(20),
+    color: '#FFFFFF',
   },
   caption: {
     fontFamily: Fonts.GeneralSans.Regular,
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: scaleSize(12),
+    lineHeight: scaleSize(18),
+    color: '#FFFFFF',
   },
   overline: {
     fontFamily: Fonts.GeneralSans.Medium,
-    fontSize: 10,
-    lineHeight: 16,
+    fontSize: scaleSize(10),
+    lineHeight: scaleSize(16),
     letterSpacing: 1.5,
+    color: '#FFFFFF',
   },
   
   // Interactive elements
   button: {
     fontFamily: Fonts.GeneralSans.Semibold,
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: scaleSize(16),
+    lineHeight: scaleSize(24),
+    color: '#FFFFFF',
   },
   link: {
     fontFamily: Fonts.GeneralSans.Medium,
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: scaleSize(16),
+    lineHeight: scaleSize(24),
+    color: '#FFFFFF',
   },
 };
 

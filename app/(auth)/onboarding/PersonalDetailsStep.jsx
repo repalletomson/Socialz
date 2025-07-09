@@ -6,9 +6,14 @@ import {
   TextInput, 
   ScrollView, 
   Alert,
-  Dimensions 
+  Dimensions,
+  ActivityIndicator
 } from 'react-native';
 import { MaterialIcons, Feather } from '@expo/vector-icons';
+import { TextStyles } from '../../../constants/Fonts';
+import { scaleSize, verticalScale } from '../../../utiles/common';
+import { useAuthStore } from '../../../stores/useAuthStore';
+import { supabase } from '../../../config/supabaseConfig';
 
 const { width } = Dimensions.get('window');
 
@@ -27,6 +32,7 @@ const colors = {
   inputBg: '#1A1A1A',
   inputBorder: '#333333',
   success: '#22C55E',
+  error: '#EF4444',
   // Updated interest selection colors with purple accents
   selectedBg: '#8B5CF6',
   selectedText: '#FFFFFF',
@@ -39,19 +45,19 @@ const colors = {
   purpleDark: '#7C3AED',
 };
 
+// 🎯 What's Your Vibe? Updated Interests with Creative Flair
 const interestOptions = [
-  { id: 'movies', label: 'Movies', icon: '🎬' },
-  { id: 'games', label: 'Gaming', icon: '🎮' },
-  { id: 'coding', label: 'Coding', icon: '💻' },
-  { id: 'music', label: 'Music', icon: '🎵' },
-  { id: 'sports', label: 'Sports', icon: '⚽' },
-  { id: 'art', label: 'Art', icon: '🎨' },
-  { id: 'reading', label: 'Reading', icon: '📚' },
-  { id: 'travel', label: 'Travel', icon: '✈️' },
+  { id: 'music', label: 'Music', icon: '🎧' },
+  { id: 'anime', label: 'Anime ', icon: '🌀' },
+  { id: 'kdrama', label: 'K-Drama Lover', icon: 'K' },
   { id: 'photography', label: 'Photography', icon: '📸' },
-  { id: 'fitness', label: 'Fitness', icon: '💪' },
-  { id: 'cooking', label: 'Cooking', icon: '👨‍🍳' },
-  { id: 'dance', label: 'Dance', icon: '💃' },
+  { id: 'movies', label: 'Movies', icon: '🎬' },
+  { id: 'cricket', label: 'Cricket', icon: '🏏' },
+  { id: 'coding', label: 'Coding', icon: '💻' },
+  { id: 'gym', label: 'Fitness', icon: '🏋️' },
+  { id: 'dance', label: 'Dance', icon: '✨' },
+  { id: 'games', label: 'Pub G', icon: '🎮' },
+  { id: 'sports', label: 'Sports', icon: '🏀' },
 ];
 
 export default function PersonalDetailsStep({ nextStep, userData, updateUserData }) {
@@ -60,13 +66,73 @@ export default function PersonalDetailsStep({ nextStep, userData, updateUserData
   const [bio, setBio] = useState(userData.bio || '');
   const [profileInitials, setProfileInitials] = useState(userData.profileInitials || '');
   const [selectedInterests, setSelectedInterests] = useState(userData.interests || []);
+  const [usernameAvailable, setUsernameAvailable] = useState(true);
+  const [checkingUsername, setCheckingUsername] = useState(false);
+  const [error, setError] = useState('');
+
+  // Generate unique username
+  const generateUniqueUsername = async (baseUsername) => {
+    let counter = 1;
+    let uniqueUsername = baseUsername;
+    
+    while (counter <= 10) { // Try up to 10 variations
+      const { data, error } = await supabase
+        .from('users')
+        .select('username')
+        .eq('username', uniqueUsername.toLowerCase())
+        .single();
+
+      if (error && error.code === 'PGRST116') {
+        // Username is available
+        return uniqueUsername;
+      }
+      
+      // Username exists, try next variation
+      uniqueUsername = `${baseUsername}${counter}`;
+      counter++;
+    }
+    
+    // If all variations are taken, add timestamp
+    return `${baseUsername}${Date.now().toString().slice(-4)}`;
+  };
+
+  // Check username availability
+  const checkUsernameAvailability = async (usernameToCheck) => {
+    if (!usernameToCheck.trim()) return;
+    
+    setCheckingUsername(true);
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('username')
+        .eq('username', usernameToCheck.toLowerCase())
+        .single();
+
+      if (error && error.code === 'PGRST116') {
+        // No user found with this username - it's available
+        setUsernameAvailable(true);
+      } else if (data) {
+        // Username already exists
+        setUsernameAvailable(false);
+      }
+    } catch (error) {
+      console.error('Error checking username availability:', error);
+      setUsernameAvailable(false);
+    } finally {
+      setCheckingUsername(false);
+    }
+  };
 
   // Auto-generate username and profile initials when full name changes
   useEffect(() => {
     if (fullName.trim()) {
       const words = fullName.trim().split(' ');
       const firstWord = words[0];
-      setUsername(firstWord.toLowerCase());
+      const generatedUsername = firstWord.toLowerCase();
+      setUsername(generatedUsername);
+      
+      // Check username availability
+      checkUsernameAvailability(generatedUsername);
       
       // Generate profile initials (first letter of first word + first letter of last word)
       if (words.length >= 2) {
@@ -91,14 +157,20 @@ export default function PersonalDetailsStep({ nextStep, userData, updateUserData
     }
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
+    setError('');
+    if (selectedInterests.length === 0) {
+      setError('Please select at least one interest.');
+      return;
+    }
+
     if (!fullName.trim()) {
       Alert.alert('Required Field', 'Please enter your full name.');
       return;
     }
 
-    if (selectedInterests.length === 0) {
-      Alert.alert('Select Interests', 'Please select at least one interest to continue.');
+    if (!usernameAvailable) {
+      Alert.alert('Username Unavailable', 'This username is already taken. Please try a different one.');
       return;
     }
 
@@ -122,50 +194,27 @@ export default function PersonalDetailsStep({ nextStep, userData, updateUserData
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <View style={{ alignItems: 'center', marginBottom: 40 }}>
-          <Text style={{
-            fontSize: 32,
-            fontWeight: '900',
-            color: colors.text,
-            marginBottom: 12,
-            textAlign: 'center',
-            letterSpacing: -0.5,
-          }}>
-            Tell us about yourself
-          </Text>
-          <Text style={{
-            fontSize: 17,
-            color: colors.textMuted,
-            textAlign: 'center',
-            lineHeight: 26,
-            fontWeight: '400',
-          }}>
-            Help us personalize your experience
-          </Text>
+        <View style={{ marginBottom: 40 }}>
+          <Text style={[TextStyles.h1, { textAlign: 'left' }]}>Tell us about yourself</Text>
+          <Text style={[TextStyles.body, { textAlign: 'left' }]}>Help us personalize your experience</Text>
         </View>
 
         {/* Full Name Input */}
-        <View style={{ marginBottom: 28 }}>
-          <Text style={{
-            color: colors.text,
-            fontSize: 17,
-            fontWeight: '600',
-            marginBottom: 12,
-            letterSpacing: -0.2,
-          }}>
+        <View style={{ marginBottom: 18 }}>
+          <Text style={{ ...TextStyles.body2, color: colors.text, marginBottom: 6, fontWeight: '600' }}>
             Full Name
           </Text>
           <View style={{
             backgroundColor: colors.inputBg,
-            borderRadius: 16,
-            borderWidth: 1.5,
+            borderRadius: 12,
+            borderWidth: 1,
             borderColor: colors.inputBorder,
             flexDirection: 'row',
             alignItems: 'center',
-            paddingHorizontal: 20,
-            height: 60,
+            paddingHorizontal: 12,
+            height: 44,
           }}>
-            <MaterialIcons name="person" size={22} color={colors.textMuted} />
+            <MaterialIcons name="person" size={18} color={colors.textMuted} />
             <TextInput
               placeholder="Enter your full name"
               placeholderTextColor={colors.textMuted}
@@ -174,9 +223,10 @@ export default function PersonalDetailsStep({ nextStep, userData, updateUserData
               style={{
                 flex: 1,
                 color: colors.text,
-                fontSize: 17,
-                marginLeft: 16,
+                fontSize: 15,
+                marginLeft: 10,
                 fontWeight: '500',
+                ...TextStyles.body2,
               }}
               autoCapitalize="words"
               returnKeyType="next"
@@ -185,24 +235,18 @@ export default function PersonalDetailsStep({ nextStep, userData, updateUserData
         </View>
 
         {/* Bio Input */}
-        <View style={{ marginBottom: 28 }}>
-          <Text style={{
-            color: colors.text,
-            fontSize: 17,
-            fontWeight: '600',
-            marginBottom: 12,
-            letterSpacing: -0.2,
-          }}>
+        <View style={{ marginBottom: 18 }}>
+          <Text style={{ ...TextStyles.body2, color: colors.text, marginBottom: 6, fontWeight: '600' }}>
             Bio
           </Text>
           <View style={{
             backgroundColor: colors.inputBg,
-            borderRadius: 16,
-            borderWidth: 1.5,
+            borderRadius: 12,
+            borderWidth: 1,
             borderColor: colors.inputBorder,
-            paddingHorizontal: 20,
-            paddingVertical: 16,
-            minHeight: 100,
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            minHeight: 44,
           }}>
             <TextInput
               placeholder="Tell us something about yourself..."
@@ -211,28 +255,75 @@ export default function PersonalDetailsStep({ nextStep, userData, updateUserData
               onChangeText={setBio}
               style={{
                 color: colors.text,
-                fontSize: 17,
+                fontSize: 15,
                 fontWeight: '500',
                 textAlignVertical: 'top',
+                ...TextStyles.body2,
               }}
               multiline
-              numberOfLines={4}
+              numberOfLines={2}
               maxLength={150}
             />
           </View>
-          <Text style={{
-            color: colors.textMuted,
-            fontSize: 13,
-            marginTop: 8,
-            textAlign: 'right',
-            fontWeight: '400',
-          }}>
-            {bio.length}/150 characters
-          </Text>
+          <Text style={{ ...TextStyles.caption, color: colors.textMuted, marginTop: 2 }}>{bio.length}/150</Text>
         </View>
 
-        {/* Generated Username & Profile Initials */}
-        {username && (
+        {/* Username Input */}
+        <View style={{ marginBottom: 18 }}>
+          <Text style={{ ...TextStyles.body2, color: colors.text, marginBottom: 6, fontWeight: '600' }}>
+            Username
+          </Text>
+          <View style={{
+            backgroundColor: colors.inputBg,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: usernameAvailable ? colors.inputBorder : colors.error,
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: 12,
+            height: 44,
+          }}>
+            <MaterialIcons name="alternate-email" size={18} color={colors.textMuted} />
+            <TextInput
+              placeholder="Enter username"
+              placeholderTextColor={colors.textMuted}
+              value={username}
+              onChangeText={(text) => {
+                setUsername(text.toLowerCase());
+                if (text.trim()) {
+                  checkUsernameAvailability(text.toLowerCase());
+                }
+              }}
+              style={{
+                flex: 1,
+                color: colors.text,
+                fontSize: 15,
+                marginLeft: 10,
+                fontWeight: '500',
+                ...TextStyles.body2,
+              }}
+              autoCapitalize="none"
+              returnKeyType="next"
+            />
+            {checkingUsername ? (
+              <ActivityIndicator size="small" color={colors.accent} />
+            ) : username && (
+              <MaterialIcons 
+                name={usernameAvailable ? "check-circle" : "error"} 
+                size={18} 
+                color={usernameAvailable ? colors.success : colors.error} 
+              />
+            )}
+          </View>
+          {username && !checkingUsername && (
+            <Text style={{ color: usernameAvailable ? colors.success : colors.error, fontSize: 12, marginTop: 2, ...TextStyles.caption }}>
+              {usernameAvailable ? '✓ Username available' : '✗ Username already taken'}
+            </Text>
+          )}
+        </View>
+
+        {/* Profile Initials Display */}
+        {profileInitials && (
           <View style={{
             backgroundColor: colors.cardBg,
             borderRadius: 20,
@@ -241,96 +332,52 @@ export default function PersonalDetailsStep({ nextStep, userData, updateUserData
             borderWidth: 1,
             borderColor: colors.border,
           }}>
-            <Text style={{
-              color: colors.textMuted,
-              fontSize: 15,
-              marginBottom: 16,
-              fontWeight: '500',
-            }}>
-              Auto-generated for you:
+            <Text style={TextStyles.label}>
+              Your Profile Avatar:
             </Text>
             
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <View style={{ flex: 1, marginRight: 20 }}>
+            <View style={{ alignItems: 'center', marginTop: 16 }}>
+              <View style={{
+                width: 80,
+                height: 80,
+                borderRadius: 40,
+                backgroundColor: colors.background,
+                justifyContent: 'center',
+                alignItems: 'center',
+                borderWidth: 3,
+                borderColor: colors.accent,
+              }}>
                 <Text style={{
-                  color: colors.textMuted,
-                  fontSize: 13,
-                  marginBottom: 6,
-                  fontWeight: '500',
-                  textTransform: 'uppercase',
-                  letterSpacing: 0.5,
-                }}>
-                  Username
-                </Text>
-                <Text style={{
+                  fontSize: 32,
+                  fontWeight: 'bold',
                   color: colors.text,
-                  fontSize: 18,
-                  fontWeight: '700',
-                  letterSpacing: -0.3,
                 }}>
-                  @{username}
+                  {profileInitials}
                 </Text>
               </View>
-              
-              <View style={{ alignItems: 'center' }}>
-                <Text style={{
-                  color: colors.textMuted,
-                  fontSize: 13,
-                  marginBottom: 6,
-                  fontWeight: '500',
-                  textTransform: 'uppercase',
-                  letterSpacing: 0.5,
-                }}>
-                  Profile Avatar
-                </Text>
-                <View style={{
-                  width: 56,
-                  height: 56,
-                  borderRadius: 28,
-                  backgroundColor: colors.background,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  borderWidth: 2.5,
-                  borderColor: colors.accent,
-                }}>
-                  <Text style={{
-                    color: colors.text,
-                    fontSize: 20,
-                    fontWeight: '800',
-                    letterSpacing: -0.5,
-                  }}>
-                    {profileInitials}
-                  </Text>
-                </View>
-              </View>
+              <Text style={{
+                color: colors.textSecondary,
+                fontSize: 14,
+                marginTop: 8,
+                textAlign: 'center',
+              }}>
+                This will be your profile picture
+              </Text>
             </View>
           </View>
         )}
 
         {/* Interests Selection */}
         <View style={{ marginBottom: 40 }}>
-          <Text style={{
-            color: colors.text,
-            fontSize: 17,
-            fontWeight: '600',
-            marginBottom: 8,
-            letterSpacing: -0.2,
-          }}>
-            What are you interested in?
-          </Text>
-          <Text style={{
-            color: colors.textMuted,
-            fontSize: 15,
-            marginBottom: 20,
-            fontWeight: '400',
-          }}>
-            Select up to 10 interests ({selectedInterests.length}/10 selected)
-          </Text>
+          <Text style={[TextStyles.label, { textAlign: 'left' }]}>What are you interested in?</Text>
+          <Text style={[TextStyles.body, { textAlign: 'left' }]}>Select up to 10 interests ({selectedInterests.length}/10 selected)</Text>
 
           <View style={{
             flexDirection: 'row',
             flexWrap: 'wrap',
-            marginHorizontal: -6,
+            marginHorizontal: -2,
+            alignItems: 'flex-start',
+            justifyContent: 'flex-start',
           }}>
             {interestOptions.map((interest) => (
               <TouchableOpacity
@@ -340,33 +387,32 @@ export default function PersonalDetailsStep({ nextStep, userData, updateUserData
                   backgroundColor: selectedInterests.includes(interest.id) 
                     ? colors.selectedBg 
                     : colors.unselectedBg,
-                  paddingHorizontal: 20,
-                  paddingVertical: 14,
-                  borderRadius: 28,
-                  margin: 6,
-                  borderWidth: 2,
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: 18,
+                  margin: 4,
+                  borderWidth: 1.5,
                   borderColor: selectedInterests.includes(interest.id) 
                     ? colors.selectedBorder 
                     : colors.unselectedBorder,
                   flexDirection: 'row',
                   alignItems: 'center',
-                  minHeight: 48,
-                  // Enhanced shadows for selected items
+                  minHeight: 32,
                   shadowColor: selectedInterests.includes(interest.id) ? colors.selectedBorder : 'transparent',
-                  shadowOffset: { width: 0, height: 3 },
-                  shadowOpacity: selectedInterests.includes(interest.id) ? 0.3 : 0,
-                  shadowRadius: 12,
-                  elevation: selectedInterests.includes(interest.id) ? 6 : 0,
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: selectedInterests.includes(interest.id) ? 0.15 : 0,
+                  shadowRadius: 4,
+                  elevation: selectedInterests.includes(interest.id) ? 2 : 0,
                 }}
               >
-                <Text style={{ fontSize: 18, marginRight: 8 }}>
+                <Text style={{ fontSize: 14, marginRight: 6 }}>
                   {interest.icon}
                 </Text>
                 <Text style={{
                   color: selectedInterests.includes(interest.id) 
                     ? colors.selectedText 
                     : colors.unselectedText,
-                  fontSize: 15,
+                  fontSize: 13,
                   fontWeight: '600',
                   letterSpacing: -0.2,
                 }}>
@@ -396,16 +442,11 @@ export default function PersonalDetailsStep({ nextStep, userData, updateUserData
             paddingHorizontal: 20,
             alignItems: 'center',
             alignSelf: 'center',
-            opacity: fullName.trim() && selectedInterests.length > 0 ? 1 : 0.4,
+            opacity: fullName.trim() && usernameAvailable && selectedInterests.length > 0 ? 1 : 0.4,
           }}
-          disabled={!fullName.trim() || selectedInterests.length === 0}
+          disabled={!fullName.trim() || !usernameAvailable || selectedInterests.length === 0}
         >
-          <Text style={{
-            color: colors.purple,
-            fontSize: 14,
-            fontWeight: '600',
-            letterSpacing: -0.1,
-          }}>
+          <Text style={TextStyles.button}>
             Continue to Education Details
           </Text>
         </TouchableOpacity>

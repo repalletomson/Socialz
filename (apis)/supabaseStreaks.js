@@ -242,9 +242,9 @@ export const getStreakLeaderboard = async (collegeName = null, limit = 10) => {
       .limit(limit);
 
     // If college is specified, filter by college
-    if (collegeName) {
-      query = query.eq('users.college->name', collegeName);
-    }
+    // if (collegeName) {
+    //   query = query.eq('users.college->name', collegeName);
+    // }
 
     const { data, error } = await query;
 
@@ -277,9 +277,9 @@ export const getUserStreakRank = async (userId, collegeName = null) => {
       .select('current_streak', { count: 'exact' })
       .gt('current_streak', userStreak.current_streak || 0);
 
-    if (collegeName) {
-      query = query.eq('users.college->name', collegeName);
-    }
+    // if (collegeName) {
+    //   query = query.eq('users.college->name', collegeName);
+    // }
 
     const { count, error } = await query;
 
@@ -345,9 +345,9 @@ export const getStreakStatistics = async (collegeName = null) => {
       .from('streaks')
       .select('current_streak, highest_streak, streak_active');
 
-    if (collegeName) {
-      query = query.eq('users.college->name', collegeName);
-    }
+    // if (collegeName) {
+    //   query = query.eq('users.college->name', collegeName);
+    // }
 
     const { data, error } = await query;
 
@@ -398,7 +398,7 @@ export const incrementUserStreak = async (userId) => {
  * Subscribe to streak changes for real-time updates
  * @param {string} userId - The user ID
  * @param {Function} callback - Callback function for updates
- * @returns {Object} Subscription object
+ * @returns {Object} Subscription objectre
  */
 export const subscribeToStreakChanges = (userId, callback) => {
   return supabase

@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useLocalSearchParams, router } from 'expo-router';
-
-// Import necessary React Native components
 import {
   View,
   ScrollView,
@@ -16,7 +14,8 @@ import {
   Alert,
   Dimensions,
   Animated,
-  Platform
+  Platform,
+  KeyboardAvoidingView
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
@@ -32,21 +31,21 @@ import { Fonts } from '../../constants/Fonts';
 
 dayjs.extend(relativeTime);
 
-// Import Firebase functions
 import { 
   getGroupMessages, 
   sendMessage, 
   deleteMessage,
-  getGroupMembers
+  getGroupMembers,
+  checkGroupMembership,
+  leaveGroup
 } from '../../lib/firebase';
 import { supabase } from '../../config/supabaseConfig';
-import { useAuth } from '../../context/authContext';
+import { useAuthStore } from '../../stores/useAuthStore';
 import networkErrorHandler from '../../utiles/networkErrorHandler';
 
 const { width } = Dimensions.get('window');
 const SECRET_KEY = "kliq-secure-messaging-2024";
 
-// Consistent Color Palette - WhatsApp-like Black Theme
 const COLORS = {
   background: '#000000',
   cardBg: '#111111',
@@ -152,8 +151,6 @@ const RulesModal = ({ visible, onClose }) => {
               • Be respectful to all group members{'\n'}
               • Avoid spam and off-topic discussions{'\n'}
             </Text>
-            
-       
             
             <Text style={{
               fontSize: 14,
@@ -289,13 +286,181 @@ const DeleteMessageModal = ({ visible, onClose, onDelete, message }) => {
   );
 };
 
-// Enhanced message truncation
+const LeaveGroupModal = ({ visible, onClose, onLeave, groupName }) => {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={{
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.8)'
+      }}>
+        <View style={{
+          backgroundColor: COLORS.cardBg,
+          borderRadius: 20,
+          padding: 24,
+          width: '85%',
+          maxWidth: 320,
+          borderWidth: 1,
+          borderColor: COLORS.border,
+        }}>
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            marginBottom: 16,
+          }}>
+            <MaterialIcons name="exit-to-app" size={24} color={COLORS.danger} />
+            <Text style={{
+              fontSize: 18,
+              fontWeight: '700',
+              color: COLORS.text,
+              marginLeft: 12,
+            }}>
+              Leave Group
+            </Text>
+          </View>
+          
+          <Text style={{
+            fontSize: 15,
+            color: COLORS.textSecondary,
+            marginBottom: 24,
+            lineHeight: 22,
+          }}>
+            Are you sure you want to leave "{groupName}"? You won't be able to see new messages or participate in this group.
+          </Text>
+          
+          <View style={{
+            flexDirection: 'row',
+            justifyContent: 'flex-end',
+            gap: 12,
+          }}>
+            <TouchableOpacity
+              onPress={onClose}
+              style={{
+                paddingVertical: 12,
+                paddingHorizontal: 20,
+                backgroundColor: COLORS.inputBg,
+                borderRadius: 12,
+              }}
+            >
+              <Text style={{
+                fontSize: 16,
+                color: COLORS.text,
+                fontWeight: '600',
+              }}>
+                Cancel
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              onPress={onLeave}
+              style={{
+                paddingVertical: 12,
+                paddingHorizontal: 20,
+                backgroundColor: COLORS.danger,
+                borderRadius: 12,
+              }}
+            >
+              <Text style={{
+                fontSize: 16,
+                color: '#FFFFFF',
+                fontWeight: '700',
+              }}>
+                Leave
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+const HeaderMenuModal = ({ visible, onClose, onRules, onLeave }) => {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity 
+        style={{
+          flex: 1,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)'
+        }}
+        onPress={onClose}
+        activeOpacity={1}
+      >
+        <View style={{
+          position: 'absolute',
+          top: 120,
+          right: 20,
+          backgroundColor: COLORS.cardBg,
+          borderRadius: 12,
+          padding: 8,
+          minWidth: 200,
+          borderWidth: 1,
+          borderColor: COLORS.border,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 8,
+          elevation: 8,
+        }}>
+          <TouchableOpacity
+            onPress={() => {
+              onClose();
+              onRules();
+            }}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingVertical: 12,
+              paddingHorizontal: 16,
+              borderRadius: 8,
+            }}
+          >
+            <MaterialIcons name="gavel" size={20} color={COLORS.textSecondary} />
+            <Text style={{
+              fontSize: 16,
+              color: COLORS.text,
+              marginLeft: 12,
+              fontWeight: '500',
+            }}>
+              Group Guidelines
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            onPress={() => {
+              onClose();
+              onLeave();
+            }}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingVertical: 12,
+              paddingHorizontal: 16,
+              borderRadius: 8,
+            }}
+          >
+            <MaterialIcons name="exit-to-app" size={20} color={COLORS.danger} />
+            <Text style={{
+              fontSize: 16,
+              color: COLORS.danger,
+              marginLeft: 12,
+              fontWeight: '500',
+            }}>
+              Leave Group
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
+};
+
 const truncateMessage = (text, maxLength = 35) => {
   if (!text || text.length <= maxLength) return text;
   return text.substring(0, maxLength) + '...';
 };
 
-// Moved outside component to prevent recreations
 const getMotivationalQuote = (groupName) => {
   const quotes = [
     `Start the conversation in ${groupName} today!`,
@@ -310,9 +475,8 @@ const getMotivationalQuote = (groupName) => {
 const GroupRoomScreen = () => {
   const navigation = useNavigation();
   const { groupId, groupName, groupImage } = useLocalSearchParams();
-  const { user } = useAuth();
+  const { user } = useAuthStore();
 
-  // Parse groupImage if it's a JSON string
   let parsedGroupImage;
   try {
     parsedGroupImage = groupImage ? JSON.parse(groupImage) : null;
@@ -320,14 +484,12 @@ const GroupRoomScreen = () => {
     parsedGroupImage = groupImage;
   }
 
-  // Create group object from params
   const group = {
     id: groupId,
     name: groupName || groupId,
     image: parsedGroupImage
   };
 
-  // State management with defaults
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -340,37 +502,37 @@ const GroupRoomScreen = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [messageToDelete, setMessageToDelete] = useState(null);
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
+  const [showLeaveGroupModal, setShowLeaveGroupModal] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [isMember, setIsMember] = useState(true);
+  const [leaving, setLeaving] = useState(false);
 
-  // Refs
   const scrollViewRef = useRef(null);
   const messagesUnsubscribeRef = useRef(null);
   const loadingTimeoutRef = useRef(null);
   const isMountedRef = useRef(true);
 
-  // Decrypt message function
   const decryptMessage = (encryptedText) => {
     try {
       if (!encryptedText) return '';
       const decrypted = AES.decrypt(encryptedText, SECRET_KEY).toString(enc.Utf8);
-      return decrypted || encryptedText; // fallback to original if decryption fails
+      return decrypted || encryptedText;
     } catch (error) {
       console.error('Decryption error:', error);
-      return encryptedText; // fallback to original text
+      return encryptedText;
     }
   };
 
-  // Encrypt message function
   const encryptMessage = (text) => {
     try {
       if (!text) return '';
       return AES.encrypt(text, SECRET_KEY).toString();
     } catch (error) {
       console.error('Encryption error:', error);
-      return text; // fallback to original text
+      return text;
     }
   };
 
-  // Update last seen in Supabase
   const updateLastSeen = async () => {
     if (!user?.uid) return;
     
@@ -381,7 +543,7 @@ const GroupRoomScreen = () => {
           last_seen: new Date().toISOString(),
           is_online: true 
         })
-        .eq('id', user.uid);
+        .eq('id', user.id);
       
       if (error) {
         console.error('Error updating last seen:', error);
@@ -391,12 +553,11 @@ const GroupRoomScreen = () => {
     }
   };
 
-  // Fetch user details from Supabase
   const fetchUserFromSupabase = async (userId) => {
     try {
       const { data, error } = await supabase
         .from('users')
-        .select('*') // Fetch all fields from users table
+        .select('*')
         .eq('id', userId)
         .maybeSingle();
 
@@ -433,7 +594,6 @@ const GroupRoomScreen = () => {
     }
   };
 
-  // Cleanup function
   const cleanup = useCallback(() => {
     if (messagesUnsubscribeRef.current) {
       messagesUnsubscribeRef.current();
@@ -446,7 +606,6 @@ const GroupRoomScreen = () => {
     }
   }, []);
 
-  // Component unmount cleanup
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
@@ -454,7 +613,6 @@ const GroupRoomScreen = () => {
     };
   }, [cleanup]);
 
-  // Focus effect for screen navigation
   useFocusEffect(
     useCallback(() => {
       isMountedRef.current = true;
@@ -462,24 +620,22 @@ const GroupRoomScreen = () => {
       
       return () => {
         cleanup();
-        // Set user offline when leaving group
-        if (user?.uid) {
+        if (user?.id) {
           supabase
             .from('users')
             .update({ 
               last_seen: new Date().toISOString(),
               is_online: false 
             })
-            .eq('id', user.uid)
+            .eq('id', user.id)
             .then(({ error }) => {
               if (error) console.error('Error setting offline status:', error);
             });
         }
       };
-    }, [groupId, cleanup, user?.uid])
+    }, [groupId, cleanup, user?.id])
   );
 
-  // Format date header function
   const formatDateHeader = (timestamp) => {
     if (!timestamp) return '';
     const date = new Date(timestamp);
@@ -500,14 +656,12 @@ const GroupRoomScreen = () => {
     }
   };
 
-  // Data fetching with error handling
   const fetchInitialData = async () => {
     try {
       setLoading(true);
       setError(null);
       cleanup();
 
-      // Add loading timeout
       loadingTimeoutRef.current = setTimeout(() => {
         if (isMountedRef.current) {
           setLoading(false);
@@ -515,10 +669,8 @@ const GroupRoomScreen = () => {
         }
       }, 10000);
 
-      // Update current user's last seen
       await updateLastSeen();
 
-      // Fetch group members
       try {
         const fetchedMembers = await Promise.race([
           getGroupMembers(groupId),
@@ -535,13 +687,11 @@ const GroupRoomScreen = () => {
         }
       }
 
-      // Subscribe to messages with proper error handling
       try {
         const messageSubscription = getGroupMessages(
           groupId,
           (fetchedMessages) => {
             if (isMountedRef.current) {
-              // Decrypt messages
               const decryptedMessages = fetchedMessages.map(message => ({
                 ...message,
                 text: message.text ? decryptMessage(message.text) : '',
@@ -554,13 +704,11 @@ const GroupRoomScreen = () => {
               setMessages(decryptedMessages);
               setLoading(false);
               
-              // Clear loading timeout
               if (loadingTimeoutRef.current) {
                 clearTimeout(loadingTimeoutRef.current);
                 loadingTimeoutRef.current = null;
               }
               
-              // Safely scroll to bottom
               setTimeout(() => {
                 if (scrollViewRef.current && isMountedRef.current) {
                   scrollViewRef.current.scrollToEnd({ animated: false });
@@ -609,30 +757,38 @@ const GroupRoomScreen = () => {
     }
   };
 
+  useEffect(() => {
+    async function checkMembership() {
+      if (!user?.id || !groupId) return;
+      try {
+        const member = await checkGroupMembership(user.id, groupId);
+        setIsMember(member);
+      } catch (err) {
+        console.error('Membership check error:', err);
+        setIsMember(false);
+      }
+    }
+    checkMembership();
+  }, [user?.id, groupId]);
+
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !user?.uid) return;
-    
+    if (!newMessage.trim() || !user?.id || !isMember) return;
+    setSending(true);
     try {
       const messageData = {
-        text: encryptMessage(newMessage), // Encrypt before sending
-        senderId: user.uid,
+        text: encryptMessage(newMessage),
+        senderId: user.id,
         senderName: user.displayName || user.full_name || 'Anonymous',
         timestamp: Date.now(),
         replyTo: replyingTo ? {
           id: replyingTo.id,
           senderName: replyingTo.senderName,
-          text: encryptMessage(replyingTo.text) // Encrypt reply text too
+          text: encryptMessage(replyingTo.text)
         } : null
       };
-
-      // Clear input immediately for better UX
+      await sendMessage(groupId, messageData);
       setNewMessage('');
       setReplyingTo(null);
-
-      // Send message
-      await sendMessage(groupId, messageData);
-      
-      // Safely scroll after message is sent
       setTimeout(() => {
         if (scrollViewRef.current && isMountedRef.current) {
           scrollViewRef.current.scrollToEnd({ animated: true });
@@ -643,6 +799,8 @@ const GroupRoomScreen = () => {
       if (isMountedRef.current) {
         Alert.alert('Error', 'Failed to send message. Please try again.');
       }
+    } finally {
+      setSending(false);
     }
   };
 
@@ -660,6 +818,53 @@ const GroupRoomScreen = () => {
     }
   };
 
+  const handleLeaveGroup = async () => {
+    if (!user?.id || !groupId) return;
+    
+    setLeaving(true);
+    try {
+      // 1. Leave group in Firebase
+      await leaveGroup(user.id, groupId);
+      
+      // 2. Update user's groups in Supabase
+      const currentGroups = user.groups || [];
+      const updatedGroups = currentGroups.filter(id => id !== groupId);
+      
+      const { error: supabaseError } = await supabase
+        .from('users')
+        .update({ groups: updatedGroups })
+        .eq('id', user.id);
+      
+      if (supabaseError) {
+        console.error('Error updating user groups in Supabase:', supabaseError);
+      }
+      
+      // 3. Update auth store
+      const { updateUserDetails } = useAuthStore.getState();
+      await updateUserDetails({ groups: updatedGroups });
+      
+      Alert.alert(
+        "Left Group",
+        "You have successfully left the group.",
+        [
+          {
+            text: "OK",
+            onPress: () => {
+              cleanup();
+              router.back();
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      networkErrorHandler.showErrorToUser(error);
+      Alert.alert("Error", "Failed to leave group. Please try again.");
+    } finally {
+      setLeaving(false);
+      setShowLeaveGroupModal(false);
+    }
+  };
+
   const formatMessageTime = (timestamp) => {
     if (!timestamp) return '';
     const date = new Date(timestamp);
@@ -670,11 +875,10 @@ const GroupRoomScreen = () => {
     });
   };
 
-  // Enhanced Swipeable Message Component
   const SwipeableMessage = React.memo(({ message, onReply }) => {
     const translateX = new Animated.Value(0);
     const opacity = new Animated.Value(0);
-    const isCurrentUser = message.senderId === user?.uid;
+    const isCurrentUser = message.senderId === user?.id;
 
     const onGestureEvent = Animated.event(
       [{ nativeEvent: { translationX: translateX } }],
@@ -685,11 +889,9 @@ const GroupRoomScreen = () => {
       if (event.nativeEvent.state === State.END) {
         const { translationX } = event.nativeEvent;
         
-        // Trigger reply if swiped enough (50px threshold)
         if (Math.abs(translationX) > 50) {
           onReply(message);
           
-          // Show reply indicator briefly
           Animated.sequence([
             Animated.timing(opacity, {
               toValue: 1,
@@ -704,7 +906,6 @@ const GroupRoomScreen = () => {
           ]).start();
         }
         
-        // Reset position
         Animated.spring(translateX, {
           toValue: 0,
           useNativeDriver: true,
@@ -721,7 +922,6 @@ const GroupRoomScreen = () => {
         <Animated.View style={{
           transform: [{ translateX }],
         }}>
-          {/* Reply indicator */}
           <Animated.View style={{
             position: 'absolute',
             right: isCurrentUser ? width - 60 : 20,
@@ -743,9 +943,8 @@ const GroupRoomScreen = () => {
     );
   });
 
-  // Enhanced Message Bubble Component - Matching ChatRoom Style
   const MessageBubble = React.memo(({ message }) => {
-    const isCurrentUser = message.senderId === user?.uid;
+    const isCurrentUser = message.senderId === user?.id;
 
     const handleLongPress = () => {
       if (isCurrentUser) {
@@ -754,110 +953,81 @@ const GroupRoomScreen = () => {
       }
     };
 
+    const formatTime = (timestamp) => {
+      if (!timestamp) return '';
+      const date = new Date(timestamp);
+      return date.toLocaleTimeString([], { 
+        hour: 'numeric', 
+        minute: '2-digit', 
+        hour12: true 
+      });
+    };
+
+    const bubbleStyle = {
+      backgroundColor: isCurrentUser ? COLORS.accent : '#191825',
+      borderRadius: 16,
+      paddingHorizontal: 18, // increased for better appearance
+      paddingVertical: 8,
+      borderTopRightRadius: isCurrentUser ? 4 : 16,
+      borderTopLeftRadius: isCurrentUser ? 16 : 4,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.05,
+      shadowRadius: 1,
+      elevation: 1,
+      alignSelf: isCurrentUser ? 'flex-end' : 'flex-start',
+      maxWidth: '80%',
+      minWidth: 56, // increased from 36
+    };
+
+    const messageTextStyle = {
+      fontSize: 13,
+      color: "#FFFFFF",
+      lineHeight: 18,
+      fontWeight: "400",
+    };
+
     return (
-      <View>
-        <View style={{
-          flexDirection: isCurrentUser ? "row-reverse" : "row",
-          alignItems: "flex-end",
-          marginHorizontal: 16,
-          marginVertical: 4,
-        }}>
-          <View style={{ 
-            alignItems: isCurrentUser ? "flex-end" : "flex-start",
-            maxWidth: "80%",
-          }}>
-            {/* Sender name for other users */}
-            {!isCurrentUser && message.senderName && (
-              <Text style={{
-                fontSize: 12,
-                fontWeight: "500",
-                color: COLORS.textSecondary,
-                marginBottom: 2,
-                marginLeft: 2,
-              }}>
-                {message.senderName}
-              </Text>
+      <View style={{ flexDirection: isCurrentUser ? 'row-reverse' : 'row', alignItems: 'flex-end', marginHorizontal: 16, marginVertical: 4 }}>
+        <View style={{ flex: 1 }}>
+          {/* Username and timestamp row above the bubble */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: isCurrentUser ? 'flex-end' : 'flex-start', marginBottom: 0 }}>
+            {!isCurrentUser && (
+              <Text style={{ fontFamily: Fonts.GeneralSans.Bold, color: '#fff', marginRight: 6, fontSize: 13 }}>{(message.senderName || '').split(' ')[0]}</Text>
             )}
-
-            {/* Message Bubble */}
-            <TouchableOpacity
-              onLongPress={handleLongPress}
-              activeOpacity={0.8}
-              style={{
-                backgroundColor: isCurrentUser ? COLORS.accent : '#191825',
-                borderRadius: 16,
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                borderTopRightRadius: isCurrentUser ? 4 : 16,
-                borderTopLeftRadius: isCurrentUser ? 16 : 4,
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 1 },
-                shadowOpacity: 0.05,
-                shadowRadius: 1,
-                elevation: 1,
-                maxWidth: "100%",
-              }}
-            >
-              {/* Reply indicator */}
-              {message.replyTo && (
-                <View style={{ 
-                  borderLeftWidth: 2, 
-                  borderLeftColor: isCurrentUser ? "rgba(255,255,255,0.4)" : COLORS.accent, 
-                  paddingLeft: 8, 
-                  marginBottom: 6,
-                  backgroundColor: isCurrentUser ? "rgba(255,255,255,0.08)" : "rgba(139, 92, 246, 0.08)",
-                  borderRadius: 6,
-                  padding: 6,
-                }}>
-                  <Text style={{ 
-                    fontSize: 11, 
-                    color: isCurrentUser ? "rgba(255,255,255,0.7)" : COLORS.textSecondary,
-                    fontWeight: "500",
-                  }}>
-                    {message.replyTo.senderName || 'User'}
-                  </Text>
-                  <Text style={{ 
-                    fontSize: 12, 
-                    color: isCurrentUser ? "rgba(255,255,255,0.8)" : COLORS.text, 
-                    marginTop: 1,
-                  }} numberOfLines={1}>
-                    {truncateMessage(message.replyTo.text, 50)}
-                  </Text>
-                </View>
-              )}
-
-              {/* Message content */}
-              <Text style={{ 
-                fontSize: 13, 
-                color: "#FFFFFF", 
-                lineHeight: 18,
-                fontWeight: "400",
-              }}>
-                {message.text}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Timestamp and read status */}
+            <Text style={{ fontFamily: Fonts.GeneralSans.Medium, color: '#A1A1AA', fontSize: 12 }}>{formatTime(message.timestamp)}</Text>
+          </View>
+          {/* Replied message bubble */}
+          {message.replyTo && (
             <View style={{
-              alignItems: isCurrentUser ? "flex-end" : "flex-start",
-              marginTop: 4,
-              marginHorizontal: 4,
+              borderLeftWidth: 3,
+              borderLeftColor: isCurrentUser ? 'rgba(255,255,255,0.4)' : COLORS.accent,
+              backgroundColor: isCurrentUser ? 'rgba(255,255,255,0.08)' : 'rgba(139, 92, 246, 0.08)',
+              borderRadius: 8,
+              paddingLeft: 10,
+              paddingVertical: 4,
+              marginBottom: 4,
+              marginRight: 4,
+              marginLeft: 0,
+              maxWidth: '90%',
             }}>
-              <Text style={{ 
-                fontSize: 10, 
-                color: COLORS.textSecondary,
-                fontWeight: "400",
-              }}>
-                {formatMessageTime(message.timestamp)}
+              <Text style={{ fontSize: 11, color: isCurrentUser ? 'rgba(255,255,255,0.7)' : COLORS.textSecondary, fontWeight: '600' }}>
+                {(message.replyTo.senderName || '').split(' ')[0] || 'User'}
+              </Text>
+              <Text style={{ fontSize: 12, color: isCurrentUser ? 'rgba(255,255,255,0.8)' : COLORS.text, marginTop: 1 }} numberOfLines={1}>
+                {truncateMessage(message.replyTo.text, 50)}
               </Text>
             </View>
+          )}
+          {/* Message bubble */}
+          <View style={bubbleStyle}>
+            <Text style={messageTextStyle}>{message.text}</Text>
           </View>
         </View>
       </View>
     );
   });
 
-  // Validate required params
   useEffect(() => {
     if (!groupId) {
       console.error('❌ Missing groupId parameter');
@@ -867,7 +1037,6 @@ const GroupRoomScreen = () => {
     }
   }, [groupId]);
 
-  // Loading state
   if (loading) {
     return (
       <View style={{
@@ -893,7 +1062,6 @@ const GroupRoomScreen = () => {
     );
   }
 
-  // Error state
   if (error) {
     return (
       <View style={{
@@ -939,7 +1107,6 @@ const GroupRoomScreen = () => {
     );
   }
 
-  // Main render
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView style={{
@@ -951,7 +1118,6 @@ const GroupRoomScreen = () => {
           barStyle="light-content"
         />
 
-        {/* Improved Group Header */}
         <View style={{
           flexDirection: 'row',
           alignItems: 'center',
@@ -967,7 +1133,6 @@ const GroupRoomScreen = () => {
           shadowRadius: 6,
           elevation: 2,
         }}>
-          {/* Back Button */}
           <TouchableOpacity
             onPress={() => {
               cleanup();
@@ -988,7 +1153,6 @@ const GroupRoomScreen = () => {
             <Ionicons name="arrow-back" size={22} color={COLORS.text} />
           </TouchableOpacity>
 
-          {/* Group Avatar */}
           <TouchableOpacity
             style={{ marginRight: 14 }}
             onPress={() => setShowMembers(true)}
@@ -1009,7 +1173,6 @@ const GroupRoomScreen = () => {
               shadowRadius: 6,
               elevation: 2,
             }}>
-              {/* If group.image exists, show image (uri or require), else initial */}
               {group.image
                 ? (typeof group.image === 'string'
                     ? <Image source={{ uri: group.image }} style={{ width: '100%', height: '100%', borderRadius: 24 }} resizeMode="cover" />
@@ -1027,7 +1190,6 @@ const GroupRoomScreen = () => {
             </View>
           </TouchableOpacity>
 
-          {/* Group Info */}
           <TouchableOpacity
             style={{ flex: 1, minWidth: 0 }}
             onPress={() => setShowMembers(true)}
@@ -1058,13 +1220,9 @@ const GroupRoomScreen = () => {
             </View>
           </TouchableOpacity>
 
-          {/* Menu Button */}
           <View style={{ marginLeft: 8 }}>
             <TouchableOpacity
-              onPress={() => {
-                setShowRulesModal(true);
-                setShowHeaderMenu(false);
-              }}
+              onPress={() => setShowHeaderMenu(true)}
               style={{
                 width: 40,
                 height: 40,
@@ -1081,194 +1239,222 @@ const GroupRoomScreen = () => {
           </View>
         </View>
 
-        {/* Messages */}
-        <ScrollView 
-          ref={scrollViewRef}
-          style={{
-            flex: 1,
-            backgroundColor: COLORS.background,
-          }}
-          contentContainerStyle={{ 
-            padding: 12,
-            paddingBottom: 20,
-            flexGrow: messages.length === 0 ? 1 : undefined, 
-            justifyContent: messages.length === 0 ? 'center' : undefined
-          }}
-          removeClippedSubviews={false}
+        <KeyboardAvoidingView 
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         >
-          {messages.length > 0 ? (
-            messages.map((message, index) => {
-              const prev = messages[index - 1];
-              const showDate = !prev || formatDateHeader(message.timestamp) !== formatDateHeader(prev.timestamp);
-              
-              return (
-                <View key={message.id}>
-                  {showDate && (
-                    <View style={{
-                      alignItems: 'center',
-                      marginVertical: 16,
-                    }}>
-                      <Text style={{
-                        color: COLORS.textSecondary,
-                        fontSize: 11,
-                        fontWeight: '600',
-                        backgroundColor: COLORS.inputBg,
-                        paddingHorizontal: 12,
-                        paddingVertical: 6,
-                        borderRadius: 16,
-                        borderWidth: 1,
-                        borderColor: COLORS.border,
+          <ScrollView 
+            ref={scrollViewRef}
+            style={{
+              flex: 1,
+              backgroundColor: COLORS.background,
+            }}
+            contentContainerStyle={{ 
+              padding: 12,
+              flexGrow: 1,
+              justifyContent: 'flex-end'
+            }}
+            removeClippedSubviews={false}
+            onContentSizeChange={() => {
+              if (scrollViewRef.current) {
+                scrollViewRef.current.scrollToEnd({ animated: false });
+              }
+            }}
+          >
+            {messages.length > 0 ? (
+              messages.map((message, index) => {
+                const prev = messages[index - 1];
+                const showDate = !prev || formatDateHeader(message.timestamp) !== formatDateHeader(prev.timestamp);
+                
+                return (
+                  <View key={message.id}>
+                    {showDate && (
+                      <View style={{
+                        alignItems: 'center',
+                        marginVertical: 16,
                       }}>
-                        {formatDateHeader(message.timestamp)}
-                      </Text>
-                    </View>
-                  )}
-                  <SwipeableMessage 
-                    key={message.id} 
-                    message={message} 
-                    onReply={setReplyingTo}
-                  />
-                </View>
-              );
-            })
-          ) : (
+                        <Text style={{
+                          color: COLORS.textSecondary,
+                          fontSize: 11,
+                          fontWeight: '600',
+                          backgroundColor: COLORS.inputBg,
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          borderRadius: 16,
+                          borderWidth: 1,
+                          borderColor: COLORS.border,
+                        }}>
+                          {formatDateHeader(message.timestamp)}
+                        </Text>
+                      </View>
+                    )}
+                    <SwipeableMessage 
+                      key={message.id} 
+                      message={message} 
+                      onReply={setReplyingTo}
+                    />
+                  </View>
+                );
+              })
+            ) : (
+              <View style={{
+                flex: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 32,
+              }}>
+                <Ionicons 
+                  name="chatbubbles-outline" 
+                  size={64} 
+                  color={COLORS.accent} 
+                  style={{ marginBottom: 16 }}
+                />
+                <Text style={{
+                  fontSize: 20,
+                  fontWeight: '700',
+                  color: COLORS.text,
+                  textAlign: 'center',
+                  marginBottom: 8,
+                }}>
+                  No messages yet
+                </Text>
+                <Text style={{
+                  color: COLORS.textSecondary,
+                  textAlign: 'center',
+                  fontSize: 16,
+                  lineHeight: 22,
+                }}>
+                  {getMotivationalQuote(group.name)}
+                </Text>
+              </View>
+            )}
+          </ScrollView>
+
+          {replyingTo && (
             <View style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
               alignItems: 'center',
+              paddingHorizontal: 16,
+              paddingVertical: 12,
               backgroundColor: COLORS.inputBg,
-              padding: 32,
-              borderRadius: 20,
+              borderTopWidth: 1,
+              borderTopColor: COLORS.border,
+              borderLeftWidth: 3,
+              borderLeftColor: COLORS.accent,
             }}>
-              <Ionicons 
-                name="chatbubbles-outline" 
-                size={64} 
-                color={COLORS.accent} 
-                style={{ marginBottom: 16 }}
-              />
-              <Text style={{
-                fontSize: 20,
-                fontWeight: '700',
-                color: COLORS.text,
-                textAlign: 'center',
-                marginBottom: 8,
+              <View style={{ flex: 1 }}>
+                <Text style={{
+                  color: COLORS.accent,
+                  fontWeight: '600',
+                  fontSize: 13,
+                }}>
+                  Replying to {replyingTo.senderName}
+                </Text>
+                <Text style={{
+                  color: COLORS.textMuted,
+                  fontSize: 12,
+                  marginTop: 2,
+                }} numberOfLines={1}>
+                  {truncateMessage(replyingTo.text, 40)}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setReplyingTo(null)}>
+                <Ionicons 
+                  name="close" 
+                  size={20} 
+                  color={COLORS.textMuted} 
+                />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {isMember ? (
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'flex-end',
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+              backgroundColor: COLORS.headerBg,
+              borderTopWidth: 1,
+              borderTopColor: COLORS.border,
+            }}>
+              <View style={{
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'flex-end',
+                backgroundColor: COLORS.inputBg,
+                borderRadius: 25,
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                maxHeight: 100,
               }}>
-                No messages yet
-              </Text>
-              <Text style={{
-                color: COLORS.textSecondary,
-                textAlign: 'center',
-                fontSize: 16,
-                lineHeight: 22,
+                <TextInput
+                  value={newMessage}
+                  onChangeText={setNewMessage}
+                  placeholder="Message"
+                  placeholderTextColor={COLORS.textMuted}
+                  multiline
+                  style={{
+                    flex: 1,
+                    color: COLORS.text,
+                    fontSize: 16,
+                    lineHeight: 20,
+                    maxHeight: 80,
+                    paddingVertical: 4,
+                  }}
+                />
+              </View>
+              
+              <TouchableOpacity 
+                onPress={handleSendMessage}
+                disabled={!newMessage.trim() || sending || !isMember}
+                style={{
+                  marginLeft: 12,
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  backgroundColor: !newMessage.trim() || sending || !isMember ? COLORS.inputBg : COLORS.accent,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  elevation: 2,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 2,
+                }}
+              >
+                {sending ? (
+                  <ActivityIndicator size={20} color={COLORS.textMuted} />
+                ) : (
+                  <Ionicons 
+                    name="send" 
+                    size={20} 
+                    color={!newMessage.trim() || !isMember ? COLORS.textMuted : '#FFFFFF'} 
+                  />
+                )}
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={{ 
+              padding: 16, 
+              backgroundColor: COLORS.inputBg, 
+              alignItems: 'center',
+              borderTopWidth: 1,
+              borderTopColor: COLORS.border
+            }}>
+              <Text style={{ 
+                color: COLORS.textMuted, 
+                fontSize: 15, 
+                textAlign: 'center' 
               }}>
-                {getMotivationalQuote(groupId)}
+                You are not a member of this group and cannot send messages.
               </Text>
             </View>
           )}
-        </ScrollView>
+        </KeyboardAvoidingView>
 
-        {/* Reply Preview */}
-        {replyingTo && (
-          <View style={{
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            paddingHorizontal: 16,
-            paddingVertical: 12,
-            backgroundColor: COLORS.inputBg,
-            borderTopWidth: 1,
-            borderTopColor: COLORS.border,
-            borderLeftWidth: 3,
-            borderLeftColor: COLORS.accent,
-          }}>
-            <View style={{ flex: 1 }}>
-              <Text style={{
-                color: COLORS.accent,
-                fontWeight: '600',
-                fontSize: 13,
-              }}>
-                Replying to {replyingTo.senderName}
-              </Text>
-              <Text style={{
-                color: COLORS.textMuted,
-                fontSize: 12,
-                marginTop: 2,
-              }} numberOfLines={1}>
-                {truncateMessage(replyingTo.text, 40)}
-              </Text>
-            </View>
-            <TouchableOpacity onPress={() => setReplyingTo(null)}>
-              <Ionicons 
-                name="close" 
-                size={20} 
-                color={COLORS.textMuted} 
-              />
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Message Input */}
-        <View style={{
-          flexDirection: 'row',
-          alignItems: 'flex-end',
-          paddingHorizontal: 16,
-          paddingVertical: 12,
-          backgroundColor: COLORS.headerBg,
-          borderTopWidth: 1,
-          borderTopColor: COLORS.border,
-        }}>
-          <View style={{
-            flex: 1,
-            flexDirection: 'row',
-            alignItems: 'flex-end',
-            backgroundColor: COLORS.inputBg,
-            borderRadius: 25,
-            paddingHorizontal: 16,
-            paddingVertical: 8,
-            maxHeight: 100,
-          }}>
-            <TextInput
-              value={newMessage}
-              onChangeText={setNewMessage}
-              placeholder="Message"
-              placeholderTextColor={COLORS.textMuted}
-              multiline
-              style={{
-                flex: 1,
-                color: COLORS.text,
-                fontSize: 16,
-                lineHeight: 20,
-                maxHeight: 80,
-                paddingVertical: 4,
-              }}
-            />
-          </View>
-          
-          <TouchableOpacity 
-            onPress={handleSendMessage}
-            disabled={!newMessage.trim()}
-            style={{
-              marginLeft: 12,
-              width: 44,
-              height: 44,
-              borderRadius: 22,
-              backgroundColor: !newMessage.trim() ? COLORS.inputBg : COLORS.accent,
-              alignItems: 'center',
-              justifyContent: 'center',
-              elevation: 2,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 1 },
-              shadowOpacity: 0.2,
-              shadowRadius: 2,
-            }}
-          >
-            <Ionicons 
-              name="send" 
-              size={20} 
-              color={!newMessage.trim() ? COLORS.textMuted : '#FFFFFF'} 
-            />
-          </TouchableOpacity>
-        </View>
-
-        {/* Modals */}
         <RulesModal
           visible={showRulesModal}
           onClose={() => setShowRulesModal(false)}
@@ -1278,6 +1464,18 @@ const GroupRoomScreen = () => {
           onClose={() => setShowDeleteModal(false)}
           onDelete={handleDeleteMessage}
           message={messageToDelete}
+        />
+        <LeaveGroupModal
+          visible={showLeaveGroupModal}
+          onClose={() => setShowLeaveGroupModal(false)}
+          onLeave={handleLeaveGroup}
+          groupName={group.name}
+        />
+        <HeaderMenuModal
+          visible={showHeaderMenu}
+          onClose={() => setShowHeaderMenu(false)}
+          onRules={() => setShowRulesModal(true)}
+          onLeave={() => setShowLeaveGroupModal(true)}
         />
       </SafeAreaView>
     </GestureHandlerRootView>

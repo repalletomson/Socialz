@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import { useAuth } from '../context/authContext';
+import { useAuthStore } from '../stores/useAuthStore';
 import { safeNavigate } from '../utiles/safeNavigation';
 import { supabase } from '../config/supabaseConfig';
 import {
@@ -41,6 +41,8 @@ import { Fonts, TextStyles } from '../constants/Fonts';
 
 const { width, height } = Dimensions.get('window');
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
+
+
 
 // Professional black theme with consistent purple accent
 const colors = {
@@ -113,12 +115,33 @@ const HotPostBanner = ({ onPress }) => {
   ) : null;
 };
 
+// Utility function to get consistent user ID
+const getUserId = (user) => {
+  // Check various possible user ID fields
+  return user?.id || user?.uid || user?.user_id || user?.userId || null;
+};
+
+// Utility function to get user info consistently
+const getUserInfo = (user) => {
+  if (!user) return null;
+  return {
+    id: getUserId(user),
+    name: user?.full_name || user?.displayName || user?.name || 'Anonymous',
+    avatar: user?.profile_image || user?.photoURL || user?.avatar || DEFAULT_AVATAR,
+    college: user?.college || user?.education_details?.college || null,
+  };
+};
+
 const PostCard = ({ post, isDetailView = false, isHotPost = false, enableRealTime = true }) => {
-  const { user } = useAuth();
+  const { user } = useAuthStore();
   const navigation = useNavigation();
   const router = useRouter();
   const [shareCount, setShareCount] = useState(0);
   const [isLikeProcessing, setIsLikeProcessing] = useState(false);
+
+  // Get consistent user info
+  const currentUser = getUserInfo(user);
+  const currentUserId = currentUser?.id;
 
   // State Management
   const [isLiked, setIsLiked] = useState(false);
@@ -133,15 +156,27 @@ const PostCard = ({ post, isDetailView = false, isHotPost = false, enableRealTim
   const [isLoading, setIsLoading] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   
-  // Permissions and Ownership
-  const isOwner = post.userId === user?.uid || post.user_id === user?.uid;
+  // Permissions and Ownership - Fixed to use consistent user ID
+  const isOwner = currentUserId && (post.userId === currentUserId || post.user_id === currentUserId);
 
   const handleShare = useCallback(async () => {
     try {
+      const appName = "SocialZ";
+      const appDescription = "Your ultimate student networking platform!";
+      const deepLink = `socialz://post/${post.id}`; // Deep link to post detail view
+      const playStoreLink = "https://play.google.com/store/apps/details?id=com.student.app"; // Your actual Android package
+      const appStoreLink = "https://apps.apple.com/app/socialz/id123456789"; // Replace with your actual App Store ID
+      const username = post.userName || post.user_name || post.username || 'Anonymous';
+      
+      // Create a more shareable message with clickable links
+      const shareMessage = `${post.title ? post.title + '\n\n' : ''}${post.content}\n\nPosted by @${username}\n\n${appDescription}\n\n📱 Download ${appName}:\nAndroid: ${playStoreLink}\niOS: ${appStoreLink}\n\n🔗 View this post: ${playStoreLink}\n\n#SocialZ #StudentNetworking #CollegeLife`;
+      
       const result = await Share.share({
-        title: post.title || `${post.userName}'s KLiqq`,
-        message: `${post.title ? post.title + '\n\n' : ''}${post.content}\n\nShared via kliq:Student networking App`,
+        title: post.title || `${post.userName}'s ${appName} Post`,
+        message: shareMessage,
+        url: playStoreLink, // Use Play Store link as fallback for better compatibility
       });
+      
       if (result.action === Share.sharedAction) {
         await incrementShareCount(post.id);
         setShareCount((prev) => prev + 1);
@@ -152,42 +187,34 @@ const PostCard = ({ post, isDetailView = false, isHotPost = false, enableRealTim
   }, [post.id, post.title, post.userName, post.content]);
 
   const handleSavePost = useCallback(async () => {
-    if (!user) {
+    if (!currentUserId) {
       Alert.alert("Please login", "You need to be logged in to save posts.");
       return;
     }
     try {
       if (isSaved) {
-        // User wants to unsave
-        const result = await unsavePost(post.id, user.uid);
-        if (result !== false) { // unsavePost returns true on success
+        const result = await unsavePost(post.id, currentUserId);
+        if (result !== false) {
           setIsSaved(false);
         }
       } else {
-        // User wants to save
-        const result = await savePost(post.id, user.uid);
-        
-        // Check if save was actually added (result will be null if already saved)
+        const result = await savePost(post.id, currentUserId);
         if (result !== null) {
           setIsSaved(true);
         } else {
-          // Save already exists, sync the UI state
-          console.log("Save already exists, syncing UI state");
           setIsSaved(true);
         }
       }
     } catch (error) {
-      console.error("Save post error:", error);
-      
-      // If there's a duplicate key error, it means the save exists but UI is out of sync
       if (error.code === '23505') {
-        console.log("Duplicate key error - syncing save state");
         setIsSaved(true);
+      } else if (error.code === '42501') {
+        Alert.alert("Authentication Error", "Please log out and log back in to save posts.");
       } else {
         Alert.alert("Error", "Unable to save post. Please try again.");
       }
     }
-  }, [post.id, user, isSaved]);
+  }, [post.id, currentUserId, isSaved]);
 
   const renderImageGrid = () => {
     // Check for images in multiple possible properties
@@ -444,39 +471,7 @@ const PostCard = ({ post, isDetailView = false, isHotPost = false, enableRealTim
                   paddingVertical: 16,
                 }}
                 onPress={() => {
-                  setShowOptionsMenu(false);
-                  // TODO: Implement edit functionality
-                }}
-              >
-                <View style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  backgroundColor: 'rgba(59, 130, 246, 0.15)',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginRight: 16,
-                }}>
-                  <Ionicons name="create-outline" size={20} color="#3B82F6" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: colors.text, fontSize: 16, fontWeight: '600' }}>
-                    Edit Post
-                  </Text>
-                  <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
-                    Make changes to your post
-                  </Text>
-                </View>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingHorizontal: 24,
-                  paddingVertical: 16,
-                }}
-                onPress={() => {
+                  
                   handleDeletePost();
                   setShowOptionsMenu(false);
                 }}
@@ -584,27 +579,20 @@ const PostCard = ({ post, isDetailView = false, isHotPost = false, enableRealTim
     const fetchInitialData = async () => {
       try {
         setIsLoading(true);
-        // Use the dedicated comment count from the post data
-        setComments([]); // We don't need to load all comments in PostCard
-
-        // Use the dedicated like count from the post data and check user's like status efficiently
+        setComments([]);
         setLikes(post.like_count || 0);
 
-        // Use the more efficient hasUserLiked function instead of fetching all likes
-        if (user?.uid) {
-          const userLiked = await hasUserLiked(post.id, user.uid);
-          setIsLiked(userLiked);
-          
-          // Check if user has saved this post
-          const userSaved = await hasUserSaved(post.id, user.uid);
-          setIsSaved(userSaved);
+        // Only check user-specific data if user is logged in
+        if (currentUserId) {
+          // Always check if the user has liked this post using the correct user ID
+          const userLiked = await hasUserLiked(post.id, { uid: currentUserId });
+          setIsLiked(!!userLiked); // Ensure boolean
+          const userSaved = await hasUserSaved(post.id, { uid: currentUserId });
+          setIsSaved(!!userSaved);
         } else {
           setIsLiked(false);
           setIsSaved(false);
         }
-
-        const fetchedViews = await getViews(post.id);
-        setPostViews(fetchedViews);
 
         const fetchedShareCount = await getShareCount(post.id);
         setShareCount(fetchedShareCount || 0);
@@ -662,13 +650,13 @@ const PostCard = ({ post, isDetailView = false, isHotPost = false, enableRealTim
             
             if (payload.eventType === 'INSERT') {
               // Check if this like is from the current user
-              if (payload.new?.user_id === user?.uid) {
+              if (payload.new?.user_id === currentUserId) {
                 setIsLiked(true);
               }
               setLikes(prev => prev + 1);
             } else if (payload.eventType === 'DELETE') {
               // Check if this unlike is from the current user
-              if (payload.old?.user_id === user?.uid) {
+              if (payload.old?.user_id === currentUserId) {
                 setIsLiked(false);
               }
               setLikes(prev => Math.max(0, prev - 1));
@@ -687,7 +675,7 @@ const PostCard = ({ post, isDetailView = false, isHotPost = false, enableRealTim
         supabase.removeChannel(likesChannel);
       }
     };
-  }, [post.id, user]);
+  }, [post.id, currentUserId]);
 
   const SkeletonLoader = () => (
     <View
@@ -776,56 +764,39 @@ const PostCard = ({ post, isDetailView = false, isHotPost = false, enableRealTim
   }
 
   const handleLike = async () => {
-    if (!user) {
+    if (!currentUserId) {
       Alert.alert("Sign In Required", "Please sign in to like posts");
       return;
     }
-
     if (isLikeProcessing) return;
-
     try {
       setIsLikeProcessing(true);
-
       if (isLiked) {
-        // User wants to unlike
-        const result = await removeLike(post.id, user);
-        if (result !== false) { // removeLike returns true on success, false on failure
+        const result = await removeLike(post.id, { uid: currentUserId });
+        if (result !== false) {
           setLikes((prev) => Math.max(0, prev - 1));
           setIsLiked(false);
         }
       } else {
-        // User wants to like
-        const result = await addLike(post.id, user);
-        
-        // Check if like was actually added (result will be null if already liked)
+        const result = await addLike(post.id, { uid: currentUserId });
         if (result !== null) {
           setLikes((prev) => prev + 1);
           setIsLiked(true);
         } else {
-          // Like already exists, sync the UI state
-          console.log("Like already exists, syncing UI state");
           setIsLiked(true);
-          
-          // Re-fetch the actual like count to ensure accuracy
           const actualLikes = await getLikes(post.id);
           setLikes(actualLikes.length);
         }
       }
     } catch (error) {
-      console.error("Like error:", error);
-      
-      // If there's a duplicate key error, it means the like exists but UI is out of sync
       if (error.code === '23505') {
-        console.log("Duplicate key error - syncing UI state");
         setIsLiked(true);
-        
-        // Re-fetch to get accurate count
         try {
           const actualLikes = await getLikes(post.id);
           setLikes(actualLikes.length);
-        } catch (syncError) {
-          console.error("Error syncing like state:", syncError);
-        }
+        } catch (syncError) {}
+      } else if (error.code === '42501') {
+        Alert.alert("Authentication Error", "Please log out and log back in to like posts.");
       } else {
         Alert.alert("Error", "Unable to process like. Please try again.");
       }
@@ -838,41 +809,37 @@ const PostCard = ({ post, isDetailView = false, isHotPost = false, enableRealTim
 
   const handleAddComment = async () => {
     if (!newComment.trim()) return;
-    if (!user) {
+    if (!currentUserId) {
       Alert.alert("Sign In Required", "Please sign in to comment");
       return;
     }
-
     try {
       const commentData = {
         content: newComment,
-        userId: user.uid,
-        userName: user.displayName || "Anonymous",
-        userAvatar: user.photoURL || DEFAULT_AVATAR,
+        userId: currentUserId,
+        userName: currentUser.name,
+        userAvatar: currentUser.avatar,
         timestamp: new Date(),
       };
-
       await addComment(post.id, commentData);
       setNewComment("");
-
       const updatedComments = await getComments(post.id);
       setComments(updatedComments);
     } catch (error) {
-      console.error("Comment error:", error);
       Alert.alert("Error", "Unable to post comment. Please try again.");
     }
   };
 
   const handleDeletePost = async () => {
-    if (!post?.id || !user?.uid) {
+    if (!post?.id || !currentUserId) {
       console.error("Delete post error: Missing post ID or user ID");
       Alert.alert("Error", "Unable to delete post. Missing required information.");
       return;
     }
 
     try {
-      console.log("Deleting post:", post.id, "by user:", user.uid);
-      await deletePost(post.id, user.uid);
+      console.log("Deleting post:", post.id, "by user:", currentUserId);
+      await deletePost(post.id, { uid: currentUserId });
       
       // Emit an event to notify other components (like the feed)
       EventEmitter.emit('post-deleted', post.id);
@@ -891,7 +858,7 @@ const PostCard = ({ post, isDetailView = false, isHotPost = false, enableRealTim
   };
 
   const handleReportPost = async () => {
-    if (!user) {
+    if (!currentUserId) {
       Alert.alert("Sign In Required", "Please sign in to report posts");
       return;
     }
@@ -915,13 +882,18 @@ const PostCard = ({ post, isDetailView = false, isHotPost = false, enableRealTim
 
   const submitReport = async (reason) => {
     try {
-      await reportPost(post.id, user.uid, reason);
+      await reportPost(post.id, { uid: currentUserId }, reason);
       Alert.alert("Report Submitted", "Thank you for reporting this post.");
     } catch (error) {
       console.error("Submit report error:", error);
       Alert.alert("Error", "Unable to submit report. Please try again.");
     }
   };
+
+  const isAnonymous = post.is_anonymous;
+  const displayName = isAnonymous ? 'Anonymous' : (post.userName || post.users?.full_name || 'Anonymous');
+  const profileInitial = isAnonymous ? 'A' : (post.profile_initials || post.users?.profile_initials || displayName.charAt(0));
+  const avatarUrl = isAnonymous ? 'https://cdn-icons-png.flaticon.com/512/149/149071.png' : (post.userAvatar || post.users?.profile_image || DEFAULT_AVATAR);
 
   return (
     <View>
@@ -957,16 +929,7 @@ const PostCard = ({ post, isDetailView = false, isHotPost = false, enableRealTim
           paddingVertical: 16,
           paddingBottom: 12
         }}>
-          <TouchableOpacity 
-            style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
-            onPress={async () => {
-              try {
-                await safeNavigate(`/profile/${post.userId}`, { push: true });
-              } catch (error) {
-                router.push(`/profile/${post.userId}`);
-              }
-            }}
-          >
+          <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
             {/* Profile initials instead of image */}
             <View style={{
               width: 48,
@@ -985,8 +948,7 @@ const PostCard = ({ post, isDetailView = false, isHotPost = false, enableRealTim
                 fontWeight: '800',
                 letterSpacing: -0.3,
               }}>
-                {post.profile_initials || post.user_initials || 
-                 (post.userName || post.user_name || 'A').charAt(0).toUpperCase()}
+                {profileInitial}
               </Text>
             </View>
             <View style={{ flex: 1 }}>
@@ -998,22 +960,12 @@ const PostCard = ({ post, isDetailView = false, isHotPost = false, enableRealTim
                   marginBottom: 2,
                 }}
               >
-                @{post.username || post.user_username || (post.userName || post.user_name || 'anonymous').toLowerCase()}
+                @{displayName.toLowerCase()}
                 {isHotPost && <Text style={{ fontSize: 12, color: colors.accent, marginLeft: 6, fontFamily: Fonts.GeneralSans.Medium }}>{" 🔥"}</Text>}
               </Text>
               
-              {/* Show full name as secondary text */}
-              {/* <Text style={{ 
-                fontSize: 12, 
-                color: colors.textMuted, 
-                fontWeight: '500',
-                marginBottom: 2 
-              }}>
-                {post.userName || post.user_name || 'Anonymous'}
-              </Text>
-               */}
               {/* Show college name for non-anonymous posts */}
-              {(post.userName !== 'Anonymous' && post.user_name !== 'Anonymous') && (post.college || post.userCollege) && (
+              {(displayName !== 'Anonymous' && post.user_name !== 'Anonymous') && (post.college || post.userCollege) && (
                 <Text style={{ 
                   fontSize: 11, 
                   color: colors.textMuted, 
@@ -1031,7 +983,7 @@ const PostCard = ({ post, isDetailView = false, isHotPost = false, enableRealTim
                 {formatTimestamp(post.createdAt || post.created_at)}
               </Text>
             </View>
-          </TouchableOpacity>
+          </View>
 
           <TouchableOpacity
             onPress={() => setShowOptionsMenu(true)}
@@ -1082,7 +1034,7 @@ const PostCard = ({ post, isDetailView = false, isHotPost = false, enableRealTim
               lineHeight: 26,
               fontFamily: Fonts.GeneralSans.Medium,
             }}
-            numberOfLines={isDetailView ? undefined : 3}
+            numberOfLines={isDetailView ? undefined : 7}
           >
             {post.content}
           </Text>
@@ -1107,7 +1059,7 @@ const PostCard = ({ post, isDetailView = false, isHotPost = false, enableRealTim
               style={{ 
                 flexDirection: "row", 
                 alignItems: "center",
-                backgroundColor: isLiked ? "rgba(139, 92, 246, 0.15)" : "rgba(255,255,255,0.05)",
+                backgroundColor: isLiked ? colors.like + "30" : "rgba(255,255,255,0.05)",
                 paddingHorizontal: 16,
                 paddingVertical: 10,
                 borderRadius: 25,
@@ -1117,14 +1069,14 @@ const PostCard = ({ post, isDetailView = false, isHotPost = false, enableRealTim
               }} 
               onPress={handleLike}
             >
-            <Ionicons
-              name={isLiked ? "heart" : "heart-outline"}
+              <Ionicons
+                name={isLiked ? "heart" : "heart-outline"}
                 size={22}
                 color={isLiked ? colors.like : colors.textSecondary}
-            />
+              />
               {likes > 0 && (
-            <Text
-              style={{
+                <Text
+                  style={{
                     marginLeft: 8,
                     color: isLiked ? colors.like : colors.textSecondary,
                     fontSize: 14,
@@ -1132,11 +1084,11 @@ const PostCard = ({ post, isDetailView = false, isHotPost = false, enableRealTim
                   }}
                 >
                   {likes > 999 ? `${(likes / 1000).toFixed(1)}K` : likes}
-            </Text>
+                </Text>
               )}
-          </TouchableOpacity>
+            </TouchableOpacity>
 
-          <TouchableOpacity
+            <TouchableOpacity
               style={{ 
                 flexDirection: "row", 
                 alignItems: "center",
@@ -1148,28 +1100,28 @@ const PostCard = ({ post, isDetailView = false, isHotPost = false, enableRealTim
                 minWidth: 60,
                 justifyContent: "center",
               }}
-            onPress={async () => {
-              try {
-                await safeNavigate(`/postDetailView/${post.id}`, { push: true });
-              } catch (error) {
-                router.push(`/postDetailView/${post.id}`);
-              }
-            }}
-          >
-              <Ionicons name="chatbubble-outline" size={20} color={colors.textSecondary} />
-              {(post.comment_count || 0) > 0 && (
-            <Text
-              style={{
-                    marginLeft: 8,
-                color: colors.textSecondary,
-                    fontSize: 14,
-                    fontFamily: Fonts.GeneralSans.Semibold,
+              onPress={async () => {
+                try {
+                  await safeNavigate(`/postDetailView/${post.id}`, { push: true });
+                } catch (error) {
+                  router.push(`/postDetailView/${post.id}`);
+                }
               }}
             >
-              {post.comment_count || 0}
-            </Text>
+              <Ionicons name="chatbubble-outline" size={20} color={colors.textSecondary} />
+              {(post.comment_count || 0) > 0 && (
+                <Text
+                  style={{
+                    marginLeft: 8,
+                    color: colors.textSecondary,
+                    fontSize: 14,
+                    fontFamily: Fonts.GeneralSans.Semibold,
+                  }}
+                >
+                  {post.comment_count || 0}
+                </Text>
               )}
-          </TouchableOpacity>
+            </TouchableOpacity>
 
             <TouchableOpacity 
               style={{ 

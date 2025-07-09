@@ -19,27 +19,27 @@ import { useRouter, useNavigation } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialIcons, Ionicons, AntDesign, Feather } from '@expo/vector-icons';
 import { useSafeNavigation } from '../../hooks/useSafeNavigation';
-import { useAuth } from '../../context/authContext';
 import { supabase } from '../../config/supabaseConfig';
 import networkErrorHandler from '../../utiles/networkErrorHandler';
 import { Fonts, TextStyles } from '../../constants/Fonts';
+import { scaleSize, verticalScale } from '../../utiles/common';
+import SelectionModal from '../../components/SelectionModal';
 
 const { width } = Dimensions.get('window');
 
-// Updated interest options matching onboarding
+// 🎯 What's Your Vibe? Updated Interests with Creative Flair
 const interestOptions = [
-  { id: 'movies', label: 'Movies', icon: '🎬' },
-  { id: 'games', label: 'Gaming', icon: '🎮' },
-  { id: 'coding', label: 'Coding', icon: '💻' },
-  { id: 'music', label: 'Music', icon: '🎵' },
-  { id: 'sports', label: 'Sports', icon: '⚽' },
-  { id: 'art', label: 'Art', icon: '🎨' },
-  { id: 'reading', label: 'Reading', icon: '📚' },
-  { id: 'travel', label: 'Travel', icon: '✈️' },
-  { id: 'photography', label: 'Photography', icon: '📸' },
-  { id: 'fitness', label: 'Fitness', icon: '💪' },
-  { id: 'cooking', label: 'Cooking', icon: '👨‍🍳' },
-  { id: 'dance', label: 'Dance', icon: '💃' },
+  { id: 'music', label: 'Music Vibes', icon: '🎧' },
+  { id: 'anime', label: 'Anime Fan', icon: '🌀' },
+  { id: 'kdrama', label: 'K-Drama Lover', icon: 'K' },
+  { id: 'photography', label: 'Shutterbug', icon: '📸' },
+  { id: 'movies', label: 'Movie Buff', icon: '🎬' },
+  { id: 'cricket', label: 'Cricket Fever', icon: '🏏' },
+  { id: 'coding', label: 'Code Wizard', icon: '💻' },
+  { id: 'gym', label: 'Gym Mode On', icon: '🏋️' },
+  { id: 'dance', label: 'Dance Floor Vibes', icon: '💃' },
+  { id: 'games', label: 'Pub G', icon: '🎮' },
+  { id: 'sports', label: 'Sports Lover', icon: '🏀' },
 ];
 
 // Graduation years
@@ -75,84 +75,125 @@ const colors = {
   purpleDark: '#7C3AED',
 };
 
+const engineeringColleges = [
+  "Indian Institute of Technology Hyderabad",
+  "National Institute of Technology Warangal",
+  "International Institute of Information Technology Hyderabad",
+  "Birla Institute of Technology and Science Hyderabad",
+  "Jawaharlal Nehru Technological University Hyderabad",
+  "University College of Engineering, Osmania University",
+  "Chaitanya Bharathi Institute of Technology",
+  "Vasavi College of Engineering",
+  "VNR Vignana Jyothi Institute of Engineering & Technology",
+  "Gokaraju Rangaraju Institute of Engineering and Technology",
+  "Mahatma Gandhi Institute of Technology",
+  "CVR College of Engineering",
+  "CMR Institute of Technology",
+  "MLR Institute of Technology",
+  "Malla Reddy Engineering College",
+  "Keshav Memorial Institute of Technology",
+  "Sreenidhi Institute of Science and Technology",
+  "Lords Institute of Engineering and Technology",
+  "BVRIT Hyderabad",
+  "J.B. Institute of Engineering and Technology",
+  "Ellenki Institute of Engineering and Technology",
+  "Institute of Aeronautical Engineering",
+  "ACE Engineering College",
+  "Vardhaman College of Engineering",
+  "Vidya Jyothi Institute of Technology",
+  "TRR College of Engineering",
+  "Kakatiya Institute of Technology and Science, Warangal",
+  "Muffakham Jah College of Engineering and Technology",
+  "Padmasri Dr. B.V. Raju Institute of Technology",
+  "Abhinav Hi-Tech College of Engineering",
+  "Jayamukhi Institute of Technological Sciences",
+  "CMR Technical Campus"
+];
+const allBranches = [
+  "Computer Science and Engineering (CSE)",
+  "Information Technology (IT)",
+  "Artificial Intelligence and Machine Learning (AIML)",
+  "Data Science (DS)",
+  "Cyber Security",
+  "Electronics and Communication Engineering (ECE)",
+  "Electrical and Electronics Engineering (EEE)",
+  "Mechanical Engineering (ME)",
+  "Civil Engineering (CE)",
+  "Chemical Engineering",
+  "Metallurgical Engineering",
+  "Instrumentation Engineering",
+  "Aeronautical Engineering",
+  "Mechatronics",
+  "Biomedical Engineering",
+  "Biotechnology",
+  "Mining Engineering",
+  "Mathematics and Computing",
+  "Engineering Physics",
+  "VLSI Design",
+  "Embedded Systems",
+  "Robotics",
+  "Environmental Engineering",
+  "B.Sc Computer Science",
+  "B.Sc Mathematics",
+  "B.Sc Electronics",
+  "B.Sc Physics",
+  "B.Sc Chemistry",
+  "B.Sc Data Science",
+  "B.Sc Biotechnology",
+  "B.Sc Statistics",
+  "B.Sc Psychology",
+  "B.Com (General)",
+  "B.Com Computers",
+  "B.Com Honors",
+  "BBA",
+  "BBA (Business Analytics)",
+  "BA Economics",
+  "BA Political Science",
+  "BA Psychology",
+  "BA Mass Communication",
+  "BA English Literature",
+  "BA Public Administration",
+  "BCA (Bachelor of Computer Applications)",
+  "B.S.W (Social Work)"
+];
+
 const EditProfile = () => {
   const router = useRouter();
   const navigation = useNavigation();
   const { safeBack } = useSafeNavigation({ modals: [], onCleanup: () => {} });
   const [loading, setLoading] = useState(true);
   const [imageUploading, setImageUploading] = useState(false);
-  const [userData, setUserData] = useState(null);
+  const [user, setUser] = useState(null);
   const [saving, setSaving] = useState(false);
   const [showYearPicker, setShowYearPicker] = useState(false);
   const [selectedInterests, setSelectedInterests] = useState([]);
   const isMounted = useRef(true);
   
-  const { user } = useAuth();
+  const [collegeModalVisible, setCollegeModalVisible] = useState(false);
+  const [branchModalVisible, setBranchModalVisible] = useState(false);
+  const [manualCollege, setManualCollege] = useState('');
+  const [manualBranch, setManualBranch] = useState('');
 
-  // Load user data
   useEffect(() => {
-    const loadUserData = async () => {
-      try {
-        setLoading(true);
-        if (!user?.uid) {
-          console.error('No user ID available');
-          if (isMounted.current) {
-            setLoading(false);
-            Alert.alert('Error', 'Unable to load user data. Please try again.');
-            safeBack();
-          }
-          return;
-        }
-
-        const { data, error } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', user.uid)
-          .single();
-
-        if (error) {
-          console.error('Error fetching user data:', error);
-          if (isMounted.current) {
-            setLoading(false);
-            Alert.alert('Error', 'Failed to load user data. Please try again.');
-            safeBack();
-          }
-          return;
-        }
-
-        if (isMounted.current) {
-          const loadedData = data || {
-            full_name: user.displayName || '',
-            username: '',
-            bio: '',
-            email: user.email || '',
-            profile_image: user.photoURL || '',
-            interests: [],
-            college: '',
-            branch: '',
-            passout_year: '',
-            profile_initials: '',
-          };
-          
-          setUserData(loadedData);
-          setSelectedInterests(loadedData.interests || []);
-          setLoading(false);
-        }
-      } catch (error) {
-        networkErrorHandler.showErrorToUser(error);
-      } finally {
-        setLoading(false);
+    async function fetchUser() {
+      setLoading(true);
+      const { data: { user: supaUser } } = await supabase.auth.getUser();
+      if (supaUser?.id) {
+        const { data, error } = await supabase.from('users').select('*').eq('id', supaUser.id).single();
+        if (!error && data) setUser(data);
       }
-    };
+      setLoading(false);
+    }
+    fetchUser();
+  }, []);
 
-    loadUserData();
-  }, [user]);
+  if (loading) return <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: '#fff' }}>Loading...</Text></View>;
 
   const toggleInterest = (interestId) => {
     if (selectedInterests.includes(interestId)) {
       const updatedInterests = selectedInterests.filter(id => id !== interestId);
       setSelectedInterests(updatedInterests);
-      setUserData(prev => ({ ...prev, interests: updatedInterests }));
+      setUser(prev => ({ ...prev, interests: updatedInterests }));
     } else {
       if (selectedInterests.length >= 10) {
         Alert.alert('Maximum Reached', 'You can select up to 10 interests only.');
@@ -160,12 +201,12 @@ const EditProfile = () => {
       }
       const updatedInterests = [...selectedInterests, interestId];
       setSelectedInterests(updatedInterests);
-      setUserData(prev => ({ ...prev, interests: updatedInterests }));
+      setUser(prev => ({ ...prev, interests: updatedInterests }));
     }
   };
 
   const selectYear = (year) => {
-    setUserData(prev => ({ ...prev, passout_year: year.toString() }));
+    setUser(prev => ({ ...prev, passout_year: year.toString() }));
     setShowYearPicker(false);
   };
 
@@ -181,7 +222,7 @@ const EditProfile = () => {
       if (!result.canceled) {
         // For now, just update the local state
         // TODO: Implement image upload to Supabase storage
-        setUserData(prev => ({ ...prev, profile_image: result.assets[0].uri }));
+        setUser(prev => ({ ...prev, profile_image: result.assets[0].uri }));
       }
     } catch (error) {
       console.error('Error picking image:', error);
@@ -192,33 +233,33 @@ const EditProfile = () => {
   const handleSave = async () => {
     try {
       setSaving(true);
-      if (!userData || !user?.uid) {
+      if (!user) {
         Alert.alert('Error', 'Unable to save changes. Please try again.');
         return;
       }
 
       // Validation
-      if (!userData.full_name?.trim()) {
+      if (!user.full_name?.trim()) {
         Alert.alert('Required Field', 'Please enter your full name.');
         return;
       }
 
-      if (!userData.username?.trim()) {
+      if (!user.username?.trim()) {
         Alert.alert('Required Field', 'Please enter your username.');
         return;
       }
 
       const updateData = {
-        id: user.uid,
-        full_name: userData.full_name?.trim(),
-        username: userData.username?.trim(),
-        email: userData.email || user.email || '', // Include email to satisfy NOT NULL constraint
-        bio: userData.bio?.trim() || '',
+        id: user.id,
+        full_name: user.full_name?.trim(),
+        username: user.username?.trim(),
+        email: user.email || '', // Include email to satisfy NOT NULL constraint
+        bio: user.bio?.trim() || '',
         interests: selectedInterests,
-        college: userData.college?.trim() || '',
-        branch: userData.branch?.trim() || '',
-        passout_year: userData.passout_year || '',
-        profile_initials: userData.profile_initials || '',
+        college: user.college?.trim() || '',
+        branch: user.branch?.trim() || '',
+        passout_year: user.passout_year || '',
+        profile_initials: user.profile_initials || '',
         updated_at: new Date().toISOString(),
       };
 
@@ -239,45 +280,18 @@ const EditProfile = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <View style={{ 
-        flex: 1, 
-        backgroundColor: colors.background,
-        justifyContent: 'center',
-        alignItems: 'center'
-      }}>
-        <StatusBar barStyle="light-content" backgroundColor={colors.background} />
-        <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={{ 
-          color: colors.textSecondary,
-          marginTop: 16,
-          fontSize: 16,
-          fontFamily: Fonts.GeneralSans.Medium
-        }}>
-          Loading profile...
-        </Text>
-      </View>
-    );
-  }
-
   const renderYearItem = ({ item }) => (
     <TouchableOpacity
       onPress={() => selectYear(item)}
       style={{
-        paddingVertical: 16,
-        paddingHorizontal: 24,
+        paddingVertical: verticalScale(16),
+        paddingHorizontal: scaleSize(24),
         borderBottomWidth: 1,
         borderBottomColor: colors.border,
-        backgroundColor: userData?.passout_year === item.toString() ? colors.selectedBg : 'transparent',
+        backgroundColor: user?.passout_year === item.toString() ? colors.selectedBg : 'transparent',
       }}
     >
-      <Text style={{
-        fontSize: 18,
-        fontWeight: '600',
-        color: userData?.passout_year === item.toString() ? colors.selectedText : colors.text,
-        textAlign: 'center',
-      }}>
+      <Text style={TextStyles.body1}>
         {item}
       </Text>
     </TouchableOpacity>
@@ -292,9 +306,9 @@ const EditProfile = () => {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingTop: Platform.OS === 'ios' ? 45 : 15,
-        paddingHorizontal: 24,
-        paddingBottom: 16,
+        paddingTop: Platform.OS === 'ios' ? scaleSize(45) : scaleSize(15),
+        paddingHorizontal: scaleSize(24),
+        paddingBottom: scaleSize(16),
         borderBottomWidth: 1,
         borderBottomColor: colors.border,
         backgroundColor: colors.background,
@@ -302,22 +316,17 @@ const EditProfile = () => {
         <TouchableOpacity
           onPress={safeBack}
           style={{
-            width: 40,
-            height: 40,
-            borderRadius: 20,
+            width: scaleSize(40),
+            height: scaleSize(40),
+            borderRadius: scaleSize(20),
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons name="arrow-back" size={scaleSize(24)} color={colors.text} />
         </TouchableOpacity>
         
-        <Text style={{
-          fontSize: 20,
-          fontFamily: Fonts.GeneralSans.Bold,
-          color: colors.text,
-          letterSpacing: -0.3,
-        }}>
+        <Text style={TextStyles.h2}>
           Edit Profile
         </Text>
 
@@ -328,12 +337,7 @@ const EditProfile = () => {
             opacity: saving ? 0.6 : 1,
           }}
         >
-          <Text style={{
-            color: colors.accent,
-            fontSize: 16,
-            fontFamily: Fonts.GeneralSans.Bold,
-            letterSpacing: -0.2,
-          }}>
+          <Text style={TextStyles.body1}>
             {saving ? 'Saving...' : 'Save'}
           </Text>
         </TouchableOpacity>
@@ -341,168 +345,116 @@ const EditProfile = () => {
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32 }}
+        contentContainerStyle={{ paddingHorizontal: scaleSize(24), paddingVertical: scaleSize(32) }}
         showsVerticalScrollIndicator={false}
       >
         {/* Profile Image Section */}
-        <View style={{ alignItems: 'center', marginBottom: 40 }}>
-          {userData?.profile_image ? (
+        <View style={{ alignItems: 'center', marginBottom: scaleSize(40) }}>
+          {user?.profile_image ? (
             <Image
-              source={{ uri: userData.profile_image }}
+              source={{ uri: user.profile_image }}
               style={{
-                width: 100,
-                height: 100,
-                borderRadius: 50,
-                marginBottom: 16,
+                width: scaleSize(100),
+                height: scaleSize(100),
+                borderRadius: scaleSize(50),
+                marginBottom: scaleSize(16),
                 borderWidth: 3,
                 borderColor: colors.border,
               }}
             />
           ) : (
             <View style={{
-              width: 100,
-              height: 100,
-              borderRadius: 50,
+              width: scaleSize(100),
+              height: scaleSize(100),
+              borderRadius: scaleSize(50),
               backgroundColor: colors.cardBg,
               justifyContent: 'center',
               alignItems: 'center',
-              marginBottom: 16,
+              marginBottom: scaleSize(16),
               borderWidth: 3,
               borderColor: colors.border,
             }}>
-              <Text style={{
-                color: colors.text,
-                fontSize: 32,
-                fontWeight: '800',
-                letterSpacing: -0.5,
-              }}>
-                {userData?.profile_initials || userData?.full_name?.charAt(0) || 'U'}
+              <Text style={TextStyles.h1}>
+                {user?.profile_initials || user?.full_name?.charAt(0) || 'U'}
               </Text>
             </View>
           )}
         </View>
 
         {/* Personal Information */}
-        <View style={{ marginBottom: 32 }}>
-          <Text style={{
-            color: colors.text,
-            fontSize: 20,
-            fontWeight: '700',
-            marginBottom: 20,
-            letterSpacing: -0.3,
-          }}>
+        <View style={{ marginBottom: scaleSize(32) }}>
+          <Text style={TextStyles.h3}>
             Personal Information
           </Text>
 
           {/* Full Name */}
-          <View style={{ marginBottom: 24 }}>
-            <Text style={{
-              color: colors.text,
-              fontSize: 17,
-              fontWeight: '600',
-              marginBottom: 12,
-              letterSpacing: -0.2,
-            }}>
-              Full Name
-            </Text>
+          <View style={{ marginBottom: scaleSize(24) }}>
+            <Text style={{ ...TextStyles.body2, color: colors.text, marginBottom: 6, fontWeight: '600' }}>Full Name</Text>
             <View style={{
               backgroundColor: colors.inputBg,
-              borderRadius: 16,
+              borderRadius: scaleSize(16),
               borderWidth: 1.5,
               borderColor: colors.inputBorder,
               flexDirection: 'row',
               alignItems: 'center',
-              paddingHorizontal: 20,
-              height: 60,
+              paddingHorizontal: scaleSize(12),
+              height: scaleSize(44),
             }}>
-              <MaterialIcons name="person" size={22} color={colors.textMuted} />
+              <MaterialIcons name="person" size={scaleSize(22)} color={colors.textMuted} />
               <TextInput
                 placeholder="Enter your full name"
                 placeholderTextColor={colors.textMuted}
-                value={userData?.full_name || ''}
-                onChangeText={(text) => setUserData(prev => ({ ...prev, full_name: text }))}
-                style={{
-                  flex: 1,
-                  color: colors.text,
-                  fontSize: 17,
-                  marginLeft: 16,
-                  fontWeight: '500',
-                }}
+                value={user?.full_name || ''}
+                onChangeText={(text) => setUser(prev => ({ ...prev, full_name: text }))}
+                style={{ flex: 1, color: colors.text, fontSize: 15, marginLeft: 10, fontWeight: '500', ...TextStyles.body2 }}
                 autoCapitalize="words"
               />
             </View>
           </View>
 
           {/* Username */}
-          <View style={{ marginBottom: 24 }}>
-            <Text style={{
-              color: colors.text,
-              fontSize: 17,
-              fontWeight: '600',
-              marginBottom: 12,
-              letterSpacing: -0.2,
-            }}>
-              Username
-            </Text>
+          <View style={{ marginBottom: scaleSize(24) }}>
+            <Text style={{ ...TextStyles.body2, color: colors.text, marginBottom: 6, fontWeight: '600' }}>Username</Text>
             <View style={{
               backgroundColor: colors.inputBg,
-              borderRadius: 16,
+              borderRadius: scaleSize(16),
               borderWidth: 1.5,
               borderColor: colors.inputBorder,
               flexDirection: 'row',
               alignItems: 'center',
-              paddingHorizontal: 20,
-              height: 60,
+              paddingHorizontal: scaleSize(12),
+              height: scaleSize(44),
             }}>
-              <MaterialIcons name="alternate-email" size={22} color={colors.textMuted} />
+              <MaterialIcons name="alternate-email" size={scaleSize(22)} color={colors.textMuted} />
               <TextInput
                 placeholder="Enter your username"
                 placeholderTextColor={colors.textMuted}
-                value={userData?.username || ''}
-                onChangeText={(text) => setUserData(prev => ({ ...prev, username: text.toLowerCase() }))}
-                style={{
-                  flex: 1,
-                  color: colors.text,
-                  fontSize: 17,
-                  marginLeft: 16,
-                  fontWeight: '500',
-                }}
+                value={user?.username || ''}
+                onChangeText={(text) => setUser(prev => ({ ...prev, username: text.toLowerCase() }))}
+                style={{ flex: 1, color: colors.text, fontSize: 15, marginLeft: 10, fontWeight: '500', ...TextStyles.body2 }}
                 autoCapitalize="none"
               />
             </View>
           </View>
 
           {/* Bio */}
-          <View style={{ marginBottom: 24 }}>
-            <Text style={{
-              color: colors.text,
-              fontSize: 17,
-              fontWeight: '600',
-              marginBottom: 12,
-              letterSpacing: -0.2,
-            }}>
-              Bio
-            </Text>
+          <View style={{ marginBottom: scaleSize(24) }}>
+            <Text style={{ ...TextStyles.body2, color: colors.text, marginBottom: 6, fontWeight: '600' }}>Bio</Text>
             <View style={{
               backgroundColor: colors.inputBg,
-              borderRadius: 16,
+              borderRadius: scaleSize(16),
               borderWidth: 1.5,
               borderColor: colors.inputBorder,
-              paddingHorizontal: 20,
-              paddingVertical: 16,
-              minHeight: 100,
+              paddingHorizontal: scaleSize(12),
+              paddingVertical: scaleSize(16),
+              minHeight: scaleSize(100),
             }}>
               <TextInput
                 placeholder="Write something about yourself..."
                 placeholderTextColor={colors.textMuted}
-                value={userData?.bio || ''}
-                onChangeText={(text) => setUserData(prev => ({ ...prev, bio: text }))}
-                style={{
-                  color: colors.text,
-                  fontSize: 17,
-                  fontWeight: '500',
-                  textAlignVertical: 'top',
-                }}
+                value={user?.bio || ''}
+                onChangeText={(text) => setUser(prev => ({ ...prev, bio: text }))}
+                style={{ color: colors.text, fontSize: 15, fontWeight: '500', textAlignVertical: 'top', ...TextStyles.body2 }}
                 multiline
                 numberOfLines={4}
               />
@@ -510,65 +462,40 @@ const EditProfile = () => {
           </View>
 
           {/* Email (Read-only) */}
-          <View style={{ marginBottom: 24 }}>
-            <Text style={{
-              color: colors.text,
-              fontSize: 17,
-              fontWeight: '600',
-              marginBottom: 12,
-              letterSpacing: -0.2,
-            }}>
-              Email
-            </Text>
+          <View style={{ marginBottom: scaleSize(24) }}>
+            <Text style={{ ...TextStyles.body2, color: colors.text, marginBottom: 6, fontWeight: '600' }}>Email</Text>
             <View style={{
               backgroundColor: colors.cardBg,
-              borderRadius: 16,
+              borderRadius: scaleSize(16),
               borderWidth: 1.5,
               borderColor: colors.border,
               flexDirection: 'row',
               alignItems: 'center',
-              paddingHorizontal: 20,
-              height: 60,
+              paddingHorizontal: scaleSize(12),
+              height: scaleSize(44),
               opacity: 0.7,
             }}>
-              <MaterialIcons name="email" size={22} color={colors.textMuted} />
-              <Text style={{
-                flex: 1,
-                color: colors.textMuted,
-                fontSize: 17,
-                marginLeft: 16,
-                fontWeight: '500',
-              }}>
-                {userData?.email || 'No email'}
+              <MaterialIcons name="email" size={scaleSize(22)} color={colors.textMuted} />
+              <Text style={{ flex: 1, color: colors.textMuted, fontSize: 15, marginLeft: 10, fontWeight: '500', ...TextStyles.body2 }}>
+                {user?.email || 'No email'}
               </Text>
             </View>
           </View>
         </View>
 
         {/* Interests Selection */}
-        <View style={{ marginBottom: 32 }}>
-          <Text style={{
-            color: colors.text,
-            fontSize: 18,
-            fontWeight: '700',
-            marginBottom: 6,
-            letterSpacing: -0.3,
-          }}>
+        <View style={{ marginBottom: scaleSize(32) }}>
+          <Text style={TextStyles.h4}>
             Interests
           </Text>
-          <Text style={{
-            color: colors.textMuted,
-            fontSize: 13,
-            marginBottom: 16,
-            fontWeight: '400',
-          }}>
+          <Text style={TextStyles.body3}>
             Select up to 10 interests ({selectedInterests.length}/10 selected)
           </Text>
 
           <View style={{
             flexDirection: 'row',
             flexWrap: 'wrap',
-            marginHorizontal: -4,
+            marginHorizontal: -scaleSize(4),
           }}>
             {interestOptions.map((interest) => (
               <TouchableOpacity
@@ -578,35 +505,28 @@ const EditProfile = () => {
                   backgroundColor: selectedInterests.includes(interest.id) 
                     ? colors.selectedBg 
                     : colors.unselectedBg,
-                  paddingHorizontal: 16,
-                  paddingVertical: 10,
-                  borderRadius: 20,
-                  margin: 4,
+                  paddingHorizontal: scaleSize(16),
+                  paddingVertical: scaleSize(10),
+                  borderRadius: scaleSize(20),
+                  margin: scaleSize(4),
                   borderWidth: 1.5,
                   borderColor: selectedInterests.includes(interest.id) 
                     ? colors.selectedBorder 
                     : colors.unselectedBorder,
                   flexDirection: 'row',
                   alignItems: 'center',
-                  minHeight: 36,
+                  minHeight: scaleSize(36),
                   shadowColor: selectedInterests.includes(interest.id) ? colors.selectedBorder : 'transparent',
-                  shadowOffset: { width: 0, height: 2 },
+                  shadowOffset: { width: 0, height: scaleSize(2) },
                   shadowOpacity: selectedInterests.includes(interest.id) ? 0.3 : 0,
-                  shadowRadius: 8,
+                  shadowRadius: scaleSize(8),
                   elevation: selectedInterests.includes(interest.id) ? 4 : 0,
                 }}
               >
-                <Text style={{ fontSize: 14, marginRight: 6 }}>
+                <Text style={{ fontSize: scaleSize(14), marginRight: scaleSize(6) }}>
                   {interest.icon}
                 </Text>
-                <Text style={{
-                  color: selectedInterests.includes(interest.id) 
-                    ? colors.selectedText 
-                    : colors.unselectedText,
-                  fontSize: 13,
-                  fontWeight: '600',
-                  letterSpacing: -0.2,
-                }}>
+                <Text style={TextStyles.body3}>
                   {interest.label}
                 </Text>
               </TouchableOpacity>
@@ -615,108 +535,18 @@ const EditProfile = () => {
         </View>
 
         {/* Education Details */}
-        <View style={{ marginBottom: 40 }}>
-          <Text style={{
-            color: colors.text,
-            fontSize: 20,
-            fontWeight: '700',
-            marginBottom: 20,
-            letterSpacing: -0.3,
-          }}>
+        <View style={{ marginBottom: scaleSize(40) }}>
+          <Text style={TextStyles.h3}>
             Education Details
           </Text>
 
-          {/* College */}
-          <View style={{ marginBottom: 24 }}>
-            <Text style={{
-              color: colors.text,
-              fontSize: 17,
-              fontWeight: '600',
-              marginBottom: 12,
-              letterSpacing: -0.2,
-            }}>
+          {/* College/University Input */}
+          <View style={{ marginBottom: verticalScale(24) }}>
+            <Text style={TextStyles.label}>
               College / University
             </Text>
-            <View style={{
-              backgroundColor: colors.inputBg,
-              borderRadius: 16,
-              borderWidth: 1.5,
-              borderColor: colors.inputBorder,
-              flexDirection: 'row',
-              alignItems: 'center',
-              paddingHorizontal: 20,
-              height: 60,
-            }}>
-              <MaterialIcons name="school" size={22} color={colors.textMuted} />
-              <TextInput
-                placeholder="e.g., XYZ Institute of Technology"
-                placeholderTextColor={colors.textMuted}
-                value={userData?.college || ''}
-                onChangeText={(text) => setUserData(prev => ({ ...prev, college: text }))}
-                style={{
-                  flex: 1,
-                  color: colors.text,
-                  fontSize: 17,
-                  marginLeft: 16,
-                  fontWeight: '500',
-                }}
-                autoCapitalize="words"
-              />
-            </View>
-          </View>
-
-          {/* Branch */}
-          <View style={{ marginBottom: 24 }}>
-            <Text style={{
-              color: colors.text,
-              fontSize: 17,
-              fontWeight: '600',
-              marginBottom: 12,
-              letterSpacing: -0.2,
-            }}>
-              Branch / Course
-            </Text>
-            <View style={{
-              backgroundColor: colors.inputBg,
-              borderRadius: 16,
-              borderWidth: 1.5,
-              borderColor: colors.inputBorder,
-              flexDirection: 'row',
-              alignItems: 'center',
-              paddingHorizontal: 20,
-              height: 60,
-            }}>
-              <MaterialIcons name="book" size={22} color={colors.textMuted} />
-              <TextInput
-                placeholder="e.g., Computer Science Engineering"
-                placeholderTextColor={colors.textMuted}
-                value={userData?.branch || ''}
-                onChangeText={(text) => setUserData(prev => ({ ...prev, branch: text }))}
-                style={{
-                  flex: 1,
-                  color: colors.text,
-                  fontSize: 17,
-                  marginLeft: 16,
-                  fontWeight: '500',
-                }}
-                autoCapitalize="words"
-              />
-            </View>
-          </View>
-
-          {/* Graduation Year */}
-          <View style={{ marginBottom: 24 }}>
-            <Text style={{
-              color: colors.text,
-              fontSize: 17,
-              fontWeight: '600',
-              marginBottom: 12,
-              letterSpacing: -0.2,
-            }}>
-              Expected Graduation Year
-            </Text>
             <TouchableOpacity
-              onPress={() => setShowYearPicker(true)}
+              onPress={() => setCollegeModalVisible(true)}
               style={{
                 backgroundColor: colors.inputBg,
                 borderRadius: 16,
@@ -724,21 +554,161 @@ const EditProfile = () => {
                 borderColor: colors.inputBorder,
                 flexDirection: 'row',
                 alignItems: 'center',
-                paddingHorizontal: 20,
-                height: 60,
+                paddingHorizontal: scaleSize(20),
+                height: verticalScale(60),
               }}
             >
-              <MaterialIcons name="event" size={22} color={colors.textMuted} />
+              <MaterialIcons name="school" size={22} color={colors.textMuted} />
               <Text style={{
                 flex: 1,
-                color: userData?.passout_year ? colors.text : colors.textMuted,
+                color: user?.college ? colors.text : colors.textMuted,
                 fontSize: 17,
-                marginLeft: 16,
+                marginLeft: scaleSize(16),
                 fontWeight: '500',
               }}>
-                {userData?.passout_year || 'Select graduation year'}
+                {user?.college || 'Select your college'}
               </Text>
               <AntDesign name="down" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+          <SelectionModal
+            visible={collegeModalVisible}
+            onClose={() => setCollegeModalVisible(false)}
+            options={engineeringColleges}
+            onSelect={(value) => {
+              if (value === 'My option is not listed') {
+                setManualCollege('');
+                setUser(prev => ({ ...prev, college: '' }));
+                setTimeout(() => setManualCollege(''), 100);
+              } else {
+                setUser(prev => ({ ...prev, college: value }));
+                setManualCollege('');
+              }
+              setCollegeModalVisible(false);
+            }}
+            title="Select College"
+            placeholder="Search college..."
+            notListedLabel="My college is not listed"
+          />
+          {manualCollege !== '' && (
+            <TextInput
+              placeholder="Enter your college name"
+              placeholderTextColor={colors.textMuted}
+              value={manualCollege}
+              onChangeText={setManualCollege}
+              style={{
+                backgroundColor: colors.inputBg,
+                color: colors.text,
+                fontSize: 17,
+                borderRadius: 16,
+                borderWidth: 1.5,
+                borderColor: colors.inputBorder,
+                paddingHorizontal: scaleSize(20),
+                height: verticalScale(60),
+                marginBottom: verticalScale(24),
+              }}
+            />
+          )}
+
+          {/* Branch/Course Input */}
+          <View style={{ marginBottom: verticalScale(24) }}>
+            <Text style={TextStyles.label}>
+              Branch / Course
+            </Text>
+            <TouchableOpacity
+              onPress={() => setBranchModalVisible(true)}
+              style={{
+                backgroundColor: colors.inputBg,
+                borderRadius: 16,
+                borderWidth: 1.5,
+                borderColor: colors.inputBorder,
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: scaleSize(20),
+                height: verticalScale(60),
+              }}
+            >
+              <MaterialIcons name="book" size={22} color={colors.textMuted} />
+              <Text style={{
+                flex: 1,
+                color: user?.branch ? colors.text : colors.textMuted,
+                fontSize: 17,
+                marginLeft: scaleSize(16),
+                fontWeight: '500',
+              }}>
+                {user?.branch || 'Select your branch'}
+              </Text>
+              <AntDesign name="down" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+          <SelectionModal
+            visible={branchModalVisible}
+            onClose={() => setBranchModalVisible(false)}
+            options={allBranches}
+            onSelect={(value) => {
+              if (value === 'My option is not listed') {
+                setManualBranch('');
+                setUser(prev => ({ ...prev, branch: '' }));
+                setTimeout(() => setManualBranch(''), 100);
+              } else {
+                setUser(prev => ({ ...prev, branch: value }));
+                setManualBranch('');
+              }
+              setBranchModalVisible(false);
+            }}
+            title="Select Branch"
+            placeholder="Search branch..."
+            notListedLabel="My branch is not listed"
+          />
+          {manualBranch !== '' && (
+            <TextInput
+              placeholder="Enter your branch name"
+              placeholderTextColor={colors.textMuted}
+              value={manualBranch}
+              onChangeText={setManualBranch}
+              style={{
+                backgroundColor: colors.inputBg,
+                color: colors.text,
+                fontSize: 17,
+                borderRadius: 16,
+                borderWidth: 1.5,
+                borderColor: colors.inputBorder,
+                paddingHorizontal: scaleSize(20),
+                height: verticalScale(60),
+                marginBottom: verticalScale(24),
+              }}
+            />
+          )}
+
+          {/* Graduation Year */}
+          <View style={{ marginBottom: scaleSize(24) }}>
+            <Text style={TextStyles.body2}>
+              Expected Graduation Year
+            </Text>
+            <TouchableOpacity
+              onPress={() => setShowYearPicker(true)}
+              style={{
+                backgroundColor: colors.inputBg,
+                borderRadius: scaleSize(16),
+                borderWidth: 1.5,
+                borderColor: colors.inputBorder,
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: scaleSize(20),
+                height: scaleSize(60),
+              }}
+            >
+              <MaterialIcons name="event" size={scaleSize(22)} color={colors.textMuted} />
+              <Text style={{
+                flex: 1,
+                color: user?.passout_year ? colors.text : colors.textMuted,
+                fontSize: scaleSize(17),
+                marginLeft: scaleSize(16),
+                fontWeight: '500',
+              }}>
+                {user?.passout_year || 'Select graduation year'}
+              </Text>
+              <AntDesign name="down" size={scaleSize(16)} color={colors.textMuted} />
             </TouchableOpacity>
           </View>
         </View>
@@ -758,41 +728,36 @@ const EditProfile = () => {
         }}>
           <View style={{
             backgroundColor: colors.background,
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
+            borderTopLeftRadius: scaleSize(24),
+            borderTopRightRadius: scaleSize(24),
             maxHeight: '60%',
-            paddingTop: 24,
+            paddingTop: scaleSize(24),
           }}>
             {/* Modal Header */}
             <View style={{
               flexDirection: 'row',
               justifyContent: 'space-between',
               alignItems: 'center',
-              paddingHorizontal: 24,
-              paddingBottom: 16,
+              paddingHorizontal: scaleSize(24),
+              paddingBottom: scaleSize(16),
               borderBottomWidth: 1,
               borderBottomColor: colors.border,
             }}>
-              <Text style={{
-                fontSize: 20,
-                fontWeight: '700',
-                color: colors.text,
-                letterSpacing: -0.3,
-              }}>
+              <Text style={TextStyles.h2}>
                 Select Graduation Year
               </Text>
               <TouchableOpacity
                 onPress={() => setShowYearPicker(false)}
                 style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
+                  width: scaleSize(32),
+                  height: scaleSize(32),
+                  borderRadius: scaleSize(16),
                   backgroundColor: colors.cardBg,
                   justifyContent: 'center',
                   alignItems: 'center',
                 }}
               >
-                <AntDesign name="close" size={18} color={colors.text} />
+                <AntDesign name="close" size={scaleSize(18)} color={colors.text} />
               </TouchableOpacity>
             </View>
             

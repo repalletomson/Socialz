@@ -10,12 +10,12 @@ import {
   Platform,
 } from 'react-native';
 // import TimeAgo from 'react-native-timeago';
-import { useAuth } from '../context/authContext';
+import { useAuthStore } from '../stores/useAuthStore';
 const CommentThread = ({ comments, postId, onAddComment, onReply }) => {
   const [newComment, setNewComment] = useState('');
   const [replyTo, setReplyTo] = useState(null);
   const slideAnim = new Animated.Value(0);
-const { user } = useAuth();
+const { user } = useAuthStore();
   const handleSubmit = () => {
     if (!newComment.trim()) return;
 

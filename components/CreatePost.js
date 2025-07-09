@@ -20,13 +20,13 @@ import {
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
-import { useAuth } from '../context/authContext';
+import { useAuthStore } from '../stores/useAuthStore';
 import { createPost } from '../(apis)/post'; // Using Supabase post API
 import { incrementUserStreak, getUserStreak } from '../(apis)/streaks';
 import { supabase } from '../config/supabaseConfig'; // Fixed import path
 
 const CreatePostScreen = ({ visible, onClose, onPostCreated }) => {
-  const { user } = useAuth();
+  const { user } = useAuthStore();
 
   const [content, setContent] = useState('');
   const [selectedImages, setSelectedImages] = useState([]);
@@ -115,6 +115,12 @@ const CreatePostScreen = ({ visible, onClose, onPostCreated }) => {
 
   const pickImage = async () => {
     try {
+      // Request permission before accessing images
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Media library access is required to select images.');
+        return;
+      }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: true,
@@ -122,7 +128,6 @@ const CreatePostScreen = ({ visible, onClose, onPostCreated }) => {
         allowsMultipleSelection: true,
         selectionLimit: 8 - selectedImages.length,
       });
-
       if (!result.canceled && result.assets) {
         const newImages = result.assets.map((asset) => asset.uri);
         setSelectedImages([...selectedImages, ...newImages]);
@@ -342,7 +347,29 @@ const CreatePostScreen = ({ visible, onClose, onPostCreated }) => {
 
           {/* Content */}
           <ScrollView style={styles.contentContainer} className=''>
-
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+              <TouchableOpacity onPress={pickImage} style={{ marginRight: 16, backgroundColor: '#1A1A1A', borderRadius: 22, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="image-outline" size={24} color="#8B5CF6" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setIsAnonymous(!isAnonymous)}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: isAnonymous ? '#8B5CF6' : '#1A1A1A',
+                  borderRadius: 20,
+                  paddingHorizontal: 16,
+                  paddingVertical: 8,
+                  borderWidth: 1.5,
+                  borderColor: isAnonymous ? '#8B5CF6' : '#333',
+                }}
+              >
+                <Ionicons name={isAnonymous ? 'eye-off' : 'eye'} size={20} color={isAnonymous ? '#fff' : '#8B5CF6'} />
+                <Text style={{ color: isAnonymous ? '#fff' : '#8B5CF6', marginLeft: 8, fontWeight: '600' }}>
+                  {isAnonymous ? 'Anonymous' : 'Post as Me'}
+                </Text>
+              </TouchableOpacity>
+            </View>
             <TextInput
               style={styles.contentInput}
               className='mt-4 pl-2 '
@@ -359,39 +386,6 @@ const CreatePostScreen = ({ visible, onClose, onPostCreated }) => {
           {/* Footer */}
               </KeyboardAvoidingView>
           <View style={styles.footer}>
-            <TouchableOpacity onPress={pickImage}>
-              <Ionicons name="images" size={28} color="#9CA3AF" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={openCamera}>
-              <Ionicons name="camera" size={28} color="#9CA3AF" />
-            </TouchableOpacity>
-            
-            {/* TUS Test Button - only show when images are selected for debugging */}
-            {selectedImages.length > 0 && (
-              <TouchableOpacity 
-                onPress={async () => {
-                  try {
-                    const testResult = await uploadImageWithTUS(
-                      selectedImages[0], 
-                      `test-${Date.now()}.jpg`
-                    );
-                    Alert.alert('TUS Test', `Upload ${testResult.success ? 'successful' : 'failed'}`);
-                  } catch (error) {
-                    Alert.alert('TUS Test Failed', error.message);
-                  }
-                }}
-                style={{
-                  backgroundColor: '#8b5cf6',
-                  padding: 8,
-                  borderRadius: 4,
-                  marginHorizontal: 8
-                }}
-              >
-                <Text style={{ color: 'white', fontSize: 12 }}>Test TUS</Text>
-              </TouchableOpacity>
-            )}
-            
-            {/* Storage Test Button - for debugging storage permissions */}
             <TouchableOpacity 
               onPress={async () => {
                 try {
@@ -417,29 +411,6 @@ const CreatePostScreen = ({ visible, onClose, onPostCreated }) => {
             >
               <Text style={{ color: 'white', fontSize: 12 }}>Storage</Text>
             </TouchableOpacity>
-            
-            <View style={styles.anonymousToggle}>
-              <Text style={styles.anonymousText}>Post Anonymously</Text>
-              <Switch
-                value={isAnonymous}
-                onValueChange={setIsAnonymous}
-                trackColor={{ false: '#3f3f46', true: '#8b5cf6' }}
-                thumbColor={isAnonymous ? '#8b5cf6' : '#f4f3f4'}
-              />
-            </View>
-
-            {/* Test Push Notification Button */}
-            {/* <TouchableOpacity 
-              onPress={testPushNotification}
-              style={{
-                backgroundColor: '#f59e42',
-                padding: 8,
-                borderRadius: 4,
-                marginHorizontal: 4
-              }}
-            >
-              <Text style={{ color: 'white', fontSize: 12 }}>Test Push</Text>
-            </TouchableOpacity> */}
           </View>
 
           {/* Hot Posts */}

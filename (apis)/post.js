@@ -89,7 +89,7 @@ export async function createPost(postData, mediaFiles, user) {
     
     // Update user streak (ONLY ONCE PER DAY)
     try {
-      const streakResult = await incrementUserStreak(user?.uid);
+      const streakResult = await incrementUserStreak(user?.id);
     } catch (streakError) {
       // Don't fail the post creation if streak update fails
     }
@@ -563,7 +563,8 @@ export const hasUserLiked = async (postId, userId) => {
     if (!isValidUUID(postId)) {
       return false;
     }
-
+    console.log('userId',userId);
+    
     const { data, error } = await supabase
       .from('likes')
       .select('id')

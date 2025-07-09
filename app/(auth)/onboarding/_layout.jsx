@@ -11,9 +11,6 @@ export default function OnboardingLayout() {
       <Stack.Screen name="EducationDetailsStep"   options={{
           headerShown: false,
         }}/>
-      <Stack.Screen name="NotificationStep"  options={{
-          headerShown: false,
-        }} />
     </Stack>
   );
 } 

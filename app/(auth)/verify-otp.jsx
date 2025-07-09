@@ -3,7 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StatusBar, Alert, KeyboardAvoi
 import { router, useLocalSearchParams } from 'expo-router';
 import { AntDesign } from '@expo/vector-icons';
 import { supabase } from '../../config/supabaseConfig';
-import { useAuth } from '../../../context/authContext';
+// import { useAuth } from '../../../context/authContext';
 
 const colors = {
   background: '#000000',
@@ -74,10 +74,46 @@ const OTPInput = ({ value, onChange, onSubmit, disabled }) => {
     </View>
   );
 };
+const verifyOTP = async (email, otp)  => {
+  try {
+    const { data, error } = await supabase.auth.verifyOtp({
+      email,
+      token: otp,
+      type: 'email',
+    });
+
+    if (error) throw error;
+
+    return data;
+  } catch (err) {
+    console.error('Error verifying OTP:', err.message);
+    return false;
+  }
+};
+
+const sendOTP = async (email)=> {
+  try {
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      createUser: true,
+      options: {
+        emailRedirectTo: 'socialz://', // Replace with your app deep link or leave blank
+      },
+    });
+
+    if (error) throw error;
+
+    return true;
+  } catch (err) {
+    console.error('Error sending OTP:', err.message);
+    return false;
+  }
+};
+
 
 export default function OTPVerificationScreen() {
   const { email } = useLocalSearchParams();
-  const { verifyOTP, sendOTP } = useAuth();
+  // const { verifyOTP, sendOTP } = useAuth();
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
@@ -139,6 +175,18 @@ export default function OTPVerificationScreen() {
         if (timerRef.current) {
           clearInterval(timerRef.current);
           timerRef.current = null;
+        }
+
+        // After successful OTP verification and login:
+        const { data: userProfile } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+        if (!userProfile) {
+          router.replace('/(auth)/onboarding');
+        } else {
+          router.replace('/(root)/(tabs)/home');
         }
       }
     } catch (error) {

@@ -1,236 +1,386 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, StatusBar, Alert, Keyboard } from 'react-native';
-import { router } from 'expo-router';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useAuth } from '../../../context/authContext';
+import { 
+  View, 
+  Text, 
+  TextInput, 
+  TouchableOpacity, 
+  KeyboardAvoidingView, 
+  Platform, 
+  ActivityIndicator,
+  StyleSheet,
+  Alert,
+  StatusBar,
+  Modal,
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import { supabase } from '../../config/supabaseConfig';
+import { Fonts, TextStyles } from '../../constants/Fonts';
 
-const colors = {
+const COLORS = {
   background: '#000000',
-  surface: '#1A1A1A',
+  card: '#111111',
+  accent: '#8B5CF6',
   text: '#FFFFFF',
-  textSecondary: '#CCCCCC',
-  textMuted: '#999999',
-  inputBg: '#2A2A2A',
-  inputBorder: '#404040',
-  buttonBg: '#FFFFFF',
-  buttonText: '#000000',
-  accent: '#3B82F6',
+  textSecondary: '#A1A1AA',
   error: '#EF4444',
-  success: '#10B981',
+  inputBg: '#1A1A1A',
+  inputBorder: '#27272A',
 };
 
-export default function EmailAuthScreen() {
+export default function SignInScreen() {
+  const [step, setStep] = useState(1);
   const [email, setEmail] = useState('');
+  const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isValidEmail, setIsValidEmail] = useState(false);
-  const emailInputRef = useRef(null);
-  const mountedRef = useRef(true);
-  const { sendOTP } = useAuth();
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [showNoDataModal, setShowNoDataModal] = useState(false);
+  const [resendTimer, setResendTimer] = useState(60);
+  const [canResend, setCanResend] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
-    mountedRef.current = true;
+    let interval;
+    if (step === 2 && resendTimer > 0) {
+      interval = setInterval(() => {
+        setResendTimer((prev) => prev - 1);
+      }, 1000);
+    } else if (resendTimer === 0) {
+      setCanResend(true);
+      clearInterval(interval);
+    }
+    return () => clearInterval(interval);
+  }, [step, resendTimer]);
 
-    // Focus input on mount
-    const focusTimer = setTimeout(() => {
-      if (mountedRef.current) {
-        emailInputRef.current?.focus();
-      }
-    }, 100);
-
-    return () => {
-      mountedRef.current = false;
-      clearTimeout(focusTimer);
-      Keyboard.dismiss();
-    };
-  }, []);
-
-  const validateEmail = (email) => {
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    const trimmedEmail = email.trim();
-    return emailRegex.test(trimmedEmail) && trimmedEmail.length >= 5 && !trimmedEmail.includes('..') && !trimmedEmail.startsWith('.') && !trimmedEmail.endsWith('.');
-  };
-
-  const handleEmailChange = (text) => {
-    if (!mountedRef.current) return;
-    setEmail(text);
-    setIsValidEmail(validateEmail(text));
-  };
-
-  const handleSendOTP = async () => {
-    if (!mountedRef.current) return;
-    
-    const trimmedEmail = email.trim();
-    if (!trimmedEmail) {
-      Alert.alert('Error', 'Please enter your email address.');
+  const handleSendCode = async () => {
+    setError('');
+    setSuccess('');
+    if (!email.trim()) {
+      setError('Please enter your email address.');
       return;
     }
-    if (!isValidEmail) {
-      Alert.alert('Error', 'Please enter a valid email address.');
-      return;
-    }
-
-    if (mountedRef.current) {
-      setLoading(true);
-    }
-    
+    setLoading(true);
     try {
-      const success = await sendOTP(trimmedEmail);
-      
-      if (success && mountedRef.current) {
-        console.log('✅ OTP sent successfully, navigating to verify-otp');
-        Keyboard.dismiss();
-        router.push({ pathname: '/(auth)/verify-otp', params: { email: trimmedEmail } });
-      }
-    } catch (error) {
-      console.error('❌ Error in handleSendOTP:', error);
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        email: email.trim(),
+        options: {
+          shouldCreateUser: false,
+        },
+      });
+      if (otpError) throw otpError;
+      setSuccess('Verification code sent! Check your email.');
+      setStep(2);
+    } catch (err) {
+      setError(err.message || 'Failed to send code.');
     } finally {
-      if (mountedRef.current) {
-        setLoading(false);
+      setLoading(false);
+    }
+  };
+
+  const handleVerify = async () => {
+    setError('');
+    setSuccess('');
+    if (!otp.trim()) {
+      setError('Please enter the verification code.');
+      return;
+    }
+    setLoading(true);
+    try {
+      // Verify OTP
+      const { data, error: verifyError } = await supabase.auth.verifyOtp({
+        email: email.trim(),
+        token: otp.trim(),
+        type: 'email',
+      });
+      if (verifyError) throw verifyError;
+      setSuccess('Verification successful!');
+      // Check if user exists in users table
+      const newUserId = data?.user?.id;
+      if (!newUserId) throw new Error('User ID not found after verification.');
+      // Fetch complete user profile from Supabase
+      const { data: userProfile, error: userError } = await supabase
+        .from('users')
+        .select('id, full_name, username, college')
+        .eq('id', newUserId)
+        .single();
+      if (userError && userError.code !== 'PGRST116') {
+        throw new Error('Failed to fetch user profile');
       }
+      if (userProfile && userProfile.id && userProfile.full_name && userProfile.username && userProfile.college) {
+        // User exists and is complete, go to home
+        router.replace('/(root)/(tabs)/home');
+      } else {
+        // User not found or incomplete, show modal
+        setShowNoDataModal(true);
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to verify code.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    setError('');
+    setSuccess('');
+    setLoading(true);
+    try {
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        email: email.trim(),
+        options: { shouldCreateUser: true },
+      });
+      if (otpError) throw otpError;
+      setSuccess('Verification code resent! Check your email.');
+      setResendTimer(60);
+      setCanResend(false);
+    } catch (err) {
+      setError(err.message || 'Failed to resend code.');
+            } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView
+      <KeyboardAvoidingView 
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 20}
-    >
-      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
-      
-      <View style={styles.header}>
-        <Text style={styles.title}>Welcome to SocialZ</Text>
-        <Text style={styles.subtitle}>Enter your email to receive a verification code</Text>
-      </View>
-      
-      <View style={styles.form}>
-        <View style={[styles.inputContainer, email && !isValidEmail && styles.inputInvalid]}>
-          <MaterialIcons name="email" size={20} color={colors.textMuted} style={styles.inputIcon} />
-          <TextInput
-            ref={emailInputRef}
-            style={styles.input}
-            placeholder="Enter your email address"
-            placeholderTextColor={colors.textMuted}
-            value={email}
-            onChangeText={handleEmailChange}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoComplete="email"
-            autoCorrect={false}
-            returnKeyType="send"
-            onSubmitEditing={handleSendOTP}
-            blurOnSubmit={false}
-          />
-        </View>
-        
-        <TouchableOpacity
-          onPress={handleSendOTP}
-          disabled={loading || !isValidEmail}
-          style={[styles.button, (loading || !isValidEmail) && styles.buttonDisabled]}
-        >
-          <Text style={styles.buttonText}>
-            {loading ? 'Sending...' : 'Send Verification Code'}
-          </Text>
-        </TouchableOpacity>
-        
-        {email && !isValidEmail && (
-          <Text style={styles.errorText}>Please enter a valid email address</Text>
+      style={{ flex: 1, backgroundColor: COLORS.background }}
+      >
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
+      <View style={[styles.container, { justifyContent: 'flex-start', paddingTop: 60 }]}> 
+        <View style={{ alignItems: 'center', marginBottom: 32 }}>
+          <Text style={{
+            fontSize: 32,
+            fontFamily: Fonts.GeneralSans.Bold,
+            color: COLORS.accent,
+            letterSpacing: -1,
+            marginBottom: 2,
+          }}>Welcome to</Text>
+          <Text style={{
+            fontSize: 40,
+            fontFamily: Fonts.GeneralSans.Bold,
+            color: COLORS.text,
+            letterSpacing: -2,
+          }}>socialz.</Text>
+          <Text style={{
+            color: COLORS.textSecondary,
+            fontSize: 16,
+            marginTop: 8,
+            fontFamily: Fonts.GeneralSans.Medium,
+            textAlign: 'center',
+            maxWidth: 320,
+          }}>
+            Sign in to connect, chat, and share with your campus community!
+              </Text>
+            </View>
+        {step === 1 && (
+          <>
+            <Text style={styles.subtitle}>Sign in with your email + OTP</Text>
+            <Text style={styles.label}>Email Address</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter your email"
+              placeholderTextColor={COLORS.textSecondary}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!loading}
+            />
+            <TouchableOpacity
+              style={styles.button}
+              onPress={handleSendCode}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>Send Code</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.linkButton}
+              onPress={() => router.replace('/(auth)/signup')}
+              disabled={loading}
+            >
+              <Text style={styles.linkText}>Create Account</Text>
+            </TouchableOpacity>
+          </>
         )}
-      </View>
-      
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>
-          By continuing, you agree to our Terms of Service and Privacy Policy
-        </Text>
-      </View>
-    </KeyboardAvoidingView>
+        {step === 2 && (
+          <>
+            <Text style={styles.label}>Verification Code</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter the code from your email"
+              placeholderTextColor={COLORS.textSecondary}
+              value={otp}
+              onChangeText={setOtp}
+              keyboardType="number-pad"
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!loading}
+            />
+            <TouchableOpacity
+              style={styles.button}
+              onPress={handleVerify}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>Verify</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.linkButton}
+              onPress={() => setStep(1)}
+              disabled={loading}
+            >
+              <Text style={styles.linkText}>Change email</Text>
+            </TouchableOpacity>
+            <View style={{ alignItems: 'center', marginTop: 12 }}>
+              {canResend ? (
+                <TouchableOpacity onPress={handleResendCode} disabled={loading}>
+                  <Text style={[styles.linkText, { color: COLORS.accent }]}>Resend OTP</Text>
+                </TouchableOpacity>
+              ) : (
+                <Text style={{ color: COLORS.textSecondary, fontSize: 15 }}>
+                  Resend available in {resendTimer}s
+                </Text>
+              )}
+              </View>
+            <TouchableOpacity
+              style={styles.linkButton}
+              onPress={() => router.replace('/(auth)/signup')}
+              disabled={loading}
+            >
+              <Text style={styles.linkText}>Create Account</Text>
+            </TouchableOpacity>
+          </>
+        )}
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {success ? <Text style={styles.success}>{success}</Text> : null}
+        <Modal
+          visible={showNoDataModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowNoDataModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>No Data Found</Text>
+              <Text style={styles.modalText}>No account found for this email. Please sign up to create a new account.</Text>
+              <TouchableOpacity 
+                style={styles.button}
+                onPress={() => {
+                  setShowNoDataModal(false);
+                  router.replace('/(auth)/signup');
+                }}
+              >
+                <Text style={styles.buttonText}>Go to Sign Up</Text>
+              </TouchableOpacity>
+            </View>
+              </View>
+        </Modal>
+            </View>
+      </KeyboardAvoidingView>
   );
 }
 
-const styles = {
-  container: { 
-    flex: 1, 
-    backgroundColor: colors.background, 
-    paddingHorizontal: 24, 
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
     justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
   },
-  header: { 
-    alignItems: 'center', 
-    marginBottom: 48 
+  title: {
+    fontSize: 28,
+    fontFamily: Fonts.GeneralSans.Bold,
+    color: COLORS.text,
+    marginBottom: 8,
+    textAlign: 'center',
   },
-  title: { 
-    fontSize: 32, 
-    fontWeight: '800', 
-    color: colors.text, 
-    textAlign: 'center' 
+  subtitle: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+    marginBottom: 24,
+    textAlign: 'center',
   },
-  subtitle: { 
-    fontSize: 16, 
-    color: colors.textSecondary, 
-    textAlign: 'center', 
-    lineHeight: 24, 
-    paddingHorizontal: 20,
-    marginTop: 12
+  label: {
+    fontSize: 15,
+    color: COLORS.textSecondary,
+    marginBottom: 8,
+    alignSelf: 'flex-start',
   },
-  form: { 
-    flex: 1, 
-    justifyContent: 'center' 
-  },
-  inputContainer: {
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: colors.inputBg,
-    borderRadius: 16, 
-    borderWidth: 2, 
-    borderColor: colors.inputBorder, 
-    paddingHorizontal: 16, 
-    marginVertical: 8,
-  },
-  inputInvalid: { 
-    borderColor: colors.error 
-  },
-  input: { 
-    flex: 1, 
-    color: colors.text, 
-    fontSize: 16, 
-    height: 56 
-  },
-  inputIcon: { 
-    marginRight: 12 
+  input: {
+    width: '100%',
+    backgroundColor: COLORS.inputBg,
+    color: COLORS.text,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: COLORS.inputBorder,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    marginBottom: 16,
   },
   button: {
-    backgroundColor: colors.buttonBg, 
-    height: 56, 
-    borderRadius: 16, 
+    backgroundColor: COLORS.accent,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
     alignItems: 'center',
-    justifyContent: 'center', 
-    marginVertical: 8,
+    marginTop: 8,
+    width: '100%',
   },
-  buttonDisabled: { 
-    backgroundColor: colors.inputBorder, 
-    opacity: 0.6 
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontFamily: Fonts.GeneralSans.Semibold,
   },
-  buttonText: { 
-    color: colors.buttonText, 
-    fontSize: 16, 
-    fontWeight: '700' 
+  linkButton: {
+    marginTop: 16,
   },
-  errorText: { 
-    color: colors.error, 
-    fontSize: 12, 
-    textAlign: 'center', 
-    marginTop: 8 
+  linkText: {
+    color: COLORS.accent,
+    fontSize: 15,
+    fontFamily: Fonts.GeneralSans.Medium,
   },
-  footer: { 
-    alignItems: 'center', 
-    paddingBottom: 40, 
-    marginTop: 40 
+  error: {
+    color: COLORS.error,
+    marginTop: 16,
+    textAlign: 'center',
   },
-  footerText: { 
-    color: colors.textMuted, 
-    fontSize: 12, 
-    textAlign: 'center', 
-    lineHeight: 18, 
-    paddingHorizontal: 40 
+  success: {
+    color: COLORS.success,
+    marginTop: 16,
+    textAlign: 'center',
   },
-};
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    width: 300,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: Fonts.GeneralSans.Bold,
+    color: COLORS.text,
+    marginBottom: 12,
+  },
+  modalText: {
+    color: COLORS.textSecondary,
+    fontSize: 15,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+});

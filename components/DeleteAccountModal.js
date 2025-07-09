@@ -9,7 +9,7 @@ import {
   TextInput
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../context/authContext';
+import { useAuthStore } from '../stores/useAuthStore';
 import { deleteUserAccount } from '../(apis)/user';
 import { Fonts } from '../constants/Fonts';
 
@@ -26,7 +26,7 @@ const COLORS = {
 export default function DeleteAccountModal({ visible, onClose }) {
   const [confirmText, setConfirmText] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
-  const { user, signOut } = useAuth();
+  const { user, logout } = useAuthStore();
 
   const handleDeleteAccount = async () => {
     if (confirmText !== 'DELETE') {
@@ -58,7 +58,7 @@ export default function DeleteAccountModal({ visible, onClose }) {
                     text: 'OK',
                     onPress: () => {
                       onClose();
-                      signOut(); // Sign out the user
+                      logout(); // Sign out the user
                     }
                   }
                 ]

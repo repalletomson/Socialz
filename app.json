@@ -1,10 +1,10 @@
 {
   "expo": {
     "name": "SocialZ",
-    "slug": "vips",
+    "slug": "socialz",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/SOCIALZ.jpeg",
+    "icon": "./assets/images/logo7.svg",
     "scheme": "socialz",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -12,32 +12,39 @@
       "supportsTablet": true,
       "infoPlist": {
         "UIBackgroundModes": [
+          "remote-notification",
           "remote-notification"
         ]
       },
-      "bundleIdentifier": "com.r.tomson.socialz"
+      "bundleIdentifier": "com.r.tomson.socialz",
+      "icon": "./assets/images/logo7.svg"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/icon.png",
+        "foregroundImage": "./assets/images/logo7.svg",
         "backgroundColor": "#000000"
       },
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.NOTIFICATIONS",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.NOTIFICATIONS",
         "android.permission.RECORD_AUDIO"
       ],
       "softwareKeyboardLayoutMode": "pan",
-      "package": "com.student.app"
+      "package": "com.student.app",
+      "icon": "./assets/images/logo7.svg"
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/SOCIALZ.jpeg"
+      "favicon": "./assets/images/logo7.svg"
     },
     "splash": {
-      "image": "./assets/images/SOCIALZ.jpeg",
-      "resizeMode": "cover",
+      "image": "./assets/images/logo7.svg",
+      "resizeMode": "contain",
+      "imageWidth": 200,
+      "imageHeight": 200,
       "backgroundColor": "#000000"
     },
     "plugins": [
@@ -45,14 +52,9 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/SOCIALZ.jpeg",
-          "imageResizeMode": "cover",
-          "backgroundColor": "#000000",
-          "dark": {
-            "image": "./assets/images/SOCIALZ.jpeg",
-            "imageResizeMode": "cover",
-            "backgroundColor": "#000000"
-          }
+          "image": "./assets/images/logo7.svg",
+          "imageResizeMode": "contain",
+        
         }
       ],
       [
@@ -71,8 +73,10 @@
       "silentLaunch": true
     },
     "updates": {
-      "fallbackToCacheTimeout": 0
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/dff077b6-4f6f-4c66-b07b-742deeca93a7"
     },
+    "runtimeVersion": "1.0.0",
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -80,7 +84,7 @@
       "typedRoutes": true
     },
     "notification": {
-      "icon": "./assets/images/icon.png",
+      "icon": "./assets/images/logo7.svg",
       "color": "#8B5CF6"
     },
     "extra": {
@@ -88,7 +92,7 @@
         "origin": false
       },
       "eas": {
-        "projectId": "f156a284-7bbc-4353-bcde-53739d132a3e"
+        "projectId": "dff077b6-4f6f-4c66-b07b-742deeca93a7"
       }
     },
     "owner": "r.tomson"

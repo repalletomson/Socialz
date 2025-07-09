@@ -43,7 +43,7 @@ export function usePushNotifications() {
     notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
       console.log('🔔 Notification received:', notification);
       setNotification(notification);
-      
+      Notifications.setBadgeCountAsync(0);
       // Handle notification based on type
       handleNotificationReceived(notification);
     });
@@ -51,7 +51,7 @@ export function usePushNotifications() {
     // Listen for notification taps
     responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
       console.log('📱 Notification tapped:', response);
-      
+      Notifications.setBadgeCountAsync(0);
       // Handle notification tap
       handleNotificationTapped(response);
     });
