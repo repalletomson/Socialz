@@ -48,35 +48,6 @@ export default function AuthContextProvider({ children }) {
     setIsMounted(true);
     let isActive = true;
 
-    // Initial session check
-    // const checkInitialSession = async () => {
-    //   try {
-    //     if (!isMounted) return;
-    //     const { data: { session } } = await supabase.auth.getSession();
-    //     if (session?.user && isMounted) {
-    //       await updateUserData(session.user.id);
-    //       const profileComplete = await checkUserProfileCompletion(session.user.id);
-    //       const collegeSelected = await checkUserCollegeSelection(session.user.id);
-    //       if (isMounted) {
-    //         setIsAuthenticated(true);
-    //         setIsProfileComplete(profileComplete);
-    //         setIsCollegeSelected(collegeSelected);
-    //       }
-    //     } else {
-    //       if (isMounted) {
-    //         setIsAuthenticated(false);
-    //         setIsProfileComplete(false);
-    //         setIsCollegeSelected(false);
-    //       }
-    //     }
-    //   } catch (error) {
-    //     if (isMounted) {
-    //       setIsAuthenticated(false);
-    //       setIsProfileComplete(false);
-    //       setIsCollegeSelected(false);
-    //     }
-    //   }
-    // };
     const checkInitialSession = async () => {
       try {
         if (!isMounted) return;

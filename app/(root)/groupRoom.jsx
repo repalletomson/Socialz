@@ -15,7 +15,8 @@ import {
   Dimensions,
   Animated,
   Platform,
-  KeyboardAvoidingView
+  KeyboardAvoidingView,
+  Linking
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
@@ -28,6 +29,7 @@ import { AES, enc } from 'react-native-crypto-js';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { Fonts } from '../../constants/Fonts';
+import ParsedText from 'react-native-parsed-text';
 
 dayjs.extend(relativeTime);
 
@@ -100,6 +102,7 @@ const RulesModal = ({ visible, onClose }) => {
               fontWeight: '700',
               color: COLORS.text,
               marginLeft: 12,
+              fontFamily: Fonts.GeneralSans.Bold,
             }}>
               Group Chat Guidelines
             </Text>
@@ -110,6 +113,7 @@ const RulesModal = ({ visible, onClose }) => {
               fontSize: 16,
               color: COLORS.textSecondary,
               marginBottom: 16,
+              fontFamily: Fonts.GeneralSans.Regular,
               lineHeight: 22,
             }}>
               Please follow these guidelines for a better group chat experience:
@@ -120,11 +124,14 @@ const RulesModal = ({ visible, onClose }) => {
               color: COLORS.text,
               marginBottom: 12,
               fontWeight: '600',
+              fontFamily: Fonts.GeneralSans.Medium,
             }}>
               🔒 Group Privacy & Security:
             </Text>
             <Text style={{
               fontSize: 14,
+              fontFamily: Fonts.GeneralSans.Regular,
+
               color: COLORS.textMuted,
               marginBottom: 16,
               lineHeight: 20,
@@ -137,6 +144,8 @@ const RulesModal = ({ visible, onClose }) => {
               fontSize: 14,
               color: COLORS.text,
               marginBottom: 12,
+              fontFamily: Fonts.GeneralSans.Medium,
+
               fontWeight: '600',
             }}>
               🤝 Group Communication:
@@ -146,6 +155,8 @@ const RulesModal = ({ visible, onClose }) => {
               color: COLORS.textMuted,
               marginBottom: 16,
               lineHeight: 20,
+              fontFamily: Fonts.GeneralSans.Regular,
+
             }}>
               • Stay on topic and be relevant{'\n'}
               • Be respectful to all group members{'\n'}
@@ -157,6 +168,8 @@ const RulesModal = ({ visible, onClose }) => {
               color: COLORS.text,
               marginBottom: 12,
               fontWeight: '600',
+              fontFamily: Fonts.GeneralSans.Medium,
+
             }}>
               ⚠️ Group Disclaimer:
             </Text>
@@ -164,6 +177,8 @@ const RulesModal = ({ visible, onClose }) => {
               fontSize: 14,
               color: COLORS.textMuted,
               marginBottom: 16,
+              fontFamily: Fonts.GeneralSans.Regular,
+
               lineHeight: 20,
             }}>
               • Members are responsible for their own messages{'\n'}
@@ -186,6 +201,8 @@ const RulesModal = ({ visible, onClose }) => {
               fontSize: 16,
               color: '#FFFFFF',
               fontWeight: '700',
+              fontFamily: Fonts.GeneralSans.Medium,
+
             }}>
               Understood
             </Text>
@@ -466,28 +483,39 @@ const getMotivationalQuote = (groupName) => {
     `Start the conversation in ${groupName} today!`,
     `Be the first to share your thoughts in ${groupName}!`,
     `This is where great ideas in ${groupName} will be shared.`,
-    `Build connections in ${groupName} with your first message!`,
+  `Build connections in ${groupName} with your first message!`,
     `The journey of ${groupName} begins with a single message.`
   ];
   return quotes[Math.floor(Math.random() * quotes.length)];
 };
 
+const handleUrlPress = (url) => {
+  Linking.openURL(url);
+};
+
 const GroupRoomScreen = () => {
   const navigation = useNavigation();
-  const { groupId, groupName, groupImage } = useLocalSearchParams();
+  const { groupId, groupName, groupImage, userGroups } = useLocalSearchParams();
   const { user } = useAuthStore();
 
-  let parsedGroupImage;
-  try {
-    parsedGroupImage = groupImage ? JSON.parse(groupImage) : null;
-  } catch (error) {
-    parsedGroupImage = groupImage;
-  }
+  // 1. Restore group image mapping by id
+  const getGroupImage = (id) => {
+    const groupImages = {
+      'projects': require('../../assets/images/placements.jpeg'),
+      'movies': require('../../assets/images/CINEMA.jpeg'),
+      'Fest&Events': require('../../assets/images/Events.jpeg'),
+      'placements': require('../../assets/images/Placementss.jpeg'),
+      'gaming': require('../../assets/images/Gaming.jpeg'),
+      'coding': require('../../assets/images/alogrithm.jpeg'),
+      // Add more as needed
+    };
+    return groupImages[id] || null;
+  };
 
   const group = {
     id: groupId,
     name: groupName || groupId,
-    image: parsedGroupImage
+    image: getGroupImage(groupId)
   };
 
   const [messages, setMessages] = useState([]);
@@ -618,8 +646,39 @@ const GroupRoomScreen = () => {
       isMountedRef.current = true;
       fetchInitialData();
       
+      // Set up real-time subscription for user groups changes
+      let userGroupsSubscription;
+      if (user?.id) {
+        userGroupsSubscription = supabase
+          .channel('user-groups-updates')
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'users',
+              filter: `id=eq.${user.id}`,
+            },
+            (payload) => {
+              if (isMountedRef.current && payload.new?.groups) {
+                const updatedGroups = payload.new.groups;
+                const isMemberNow = updatedGroups.includes(groupId);
+                setIsMember(isMemberNow);
+                
+                // Update auth store
+                const { updateUserDetails } = useAuthStore.getState();
+                updateUserDetails({ groups: updatedGroups });
+              }
+            }
+          )
+          .subscribe();
+      }
+      
       return () => {
         cleanup();
+        if (userGroupsSubscription) {
+          supabase.removeChannel(userGroupsSubscription);
+        }
         if (user?.id) {
           supabase
             .from('users')
@@ -670,6 +729,28 @@ const GroupRoomScreen = () => {
       }, 10000);
 
       await updateLastSeen();
+      
+      // Refresh user data to ensure we have the latest groups
+      if (user?.id) {
+        try {
+          const { data: userData, error: userError } = await supabase
+            .from('users')
+            .select('groups')
+            .eq('id', user.id)
+            .single();
+          
+          if (!userError && userData) {
+            const { updateUserDetails } = useAuthStore.getState();
+            updateUserDetails({ groups: userData.groups || [] });
+            
+            // Update membership status based on fresh data
+            const isMemberNow = (userData.groups || []).includes(groupId);
+            setIsMember(isMemberNow);
+          }
+        } catch (refreshError) {
+          console.warn('Failed to refresh user data:', refreshError);
+        }
+      }
 
       try {
         const fetchedMembers = await Promise.race([
@@ -760,7 +841,30 @@ const GroupRoomScreen = () => {
   useEffect(() => {
     async function checkMembership() {
       if (!user?.id || !groupId) return;
+      
       try {
+        // First check if userGroups parameter is passed (from navigation)
+        if (userGroups && typeof userGroups === 'string' && (userGroups.trim().startsWith('[') || userGroups.trim().startsWith('{'))) {
+          try {
+            const parsedUserGroups = JSON.parse(userGroups);
+            const isMemberFromParams = parsedUserGroups.includes(groupId);
+            setIsMember(isMemberFromParams);
+            return;
+          } catch (parseError) {
+            console.warn('Failed to parse userGroups:', parseError);
+          }
+        }
+        
+        // Fallback: check from user's groups in auth store
+        const userGroupsFromStore = user.groups || [];
+        const isMemberFromStore = userGroupsFromStore.includes(groupId);
+        
+        if (isMemberFromStore) {
+          setIsMember(true);
+          return;
+        }
+        
+        // Final fallback: check Firebase (for backward compatibility)
         const member = await checkGroupMembership(user.id, groupId);
         setIsMember(member);
       } catch (err) {
@@ -769,7 +873,7 @@ const GroupRoomScreen = () => {
       }
     }
     checkMembership();
-  }, [user?.id, groupId]);
+  }, [user?.id, groupId, userGroups, user?.groups]);
 
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !user?.id || !isMember) return;
@@ -823,10 +927,7 @@ const GroupRoomScreen = () => {
     
     setLeaving(true);
     try {
-      // 1. Leave group in Firebase
-      await leaveGroup(user.id, groupId);
-      
-      // 2. Update user's groups in Supabase
+      // 1. Update user's groups in Supabase first
       const currentGroups = user.groups || [];
       const updatedGroups = currentGroups.filter(id => id !== groupId);
       
@@ -837,11 +938,23 @@ const GroupRoomScreen = () => {
       
       if (supabaseError) {
         console.error('Error updating user groups in Supabase:', supabaseError);
+        throw supabaseError;
+      }
+      
+      // 2. Leave group in Firebase
+      try {
+        await leaveGroup(user.id, groupId);
+      } catch (firebaseError) {
+        console.warn('Firebase leave group failed:', firebaseError);
+        // Continue even if Firebase fails, since Supabase is the primary source
       }
       
       // 3. Update auth store
       const { updateUserDetails } = useAuthStore.getState();
       await updateUserDetails({ groups: updatedGroups });
+      
+      // 4. Update local state
+      setIsMember(false);
       
       Alert.alert(
         "Left Group",
@@ -965,11 +1078,11 @@ const GroupRoomScreen = () => {
 
     const bubbleStyle = {
       backgroundColor: isCurrentUser ? COLORS.accent : '#191825',
-      borderRadius: 16,
+      borderRadius: 18,
       paddingHorizontal: 18, // increased for better appearance
       paddingVertical: 8,
-      borderTopRightRadius: isCurrentUser ? 4 : 16,
-      borderTopLeftRadius: isCurrentUser ? 16 : 4,
+      // borderTopRightRadius: isCurrentUser ? 4 : 16,
+      // borderTopLeftRadius: isCurrentUser ? 16 : 4,
       shadowColor: "#000",
       shadowOffset: { width: 0, height: 1 },
       shadowOpacity: 0.05,
@@ -982,9 +1095,10 @@ const GroupRoomScreen = () => {
 
     const messageTextStyle = {
       fontSize: 13,
-      color: "#FFFFFF",
+      color: '#fff',
       lineHeight: 18,
-      fontWeight: "400",
+      fontFamily: 'GeneralSans-Regular',
+      fontWeight: '400',
     };
 
     return (
@@ -1002,27 +1116,60 @@ const GroupRoomScreen = () => {
             <View style={{
               borderLeftWidth: 3,
               borderLeftColor: isCurrentUser ? 'rgba(255,255,255,0.4)' : COLORS.accent,
-              backgroundColor: isCurrentUser ? 'rgba(255,255,255,0.08)' : 'rgba(139, 92, 246, 0.08)',
+              backgroundColor: '#2D193E', // visible background for reply
               borderRadius: 8,
               paddingLeft: 10,
               paddingVertical: 4,
               marginBottom: 4,
-              marginRight: 4,
               marginLeft: 0,
-              maxWidth: '90%',
+              maxWidth: '100%', // Stretch to full width of bubble
+              // Remove marginRight to avoid right gap
             }}>
-              <Text style={{ fontSize: 11, color: isCurrentUser ? 'rgba(255,255,255,0.7)' : COLORS.textSecondary, fontWeight: '600' }}>
+              <Text style={{ fontSize: 13, color: '#fff', fontWeight: '600', fontFamily: 'GeneralSans-Regular' }}>
                 {(message.replyTo.senderName || '').split(' ')[0] || 'User'}
               </Text>
-              <Text style={{ fontSize: 12, color: isCurrentUser ? 'rgba(255,255,255,0.8)' : COLORS.text, marginTop: 1 }} numberOfLines={1}>
+              <ParsedText
+                style={{ fontSize: 13, color: '#fff', fontFamily: 'GeneralSans-Regular' }}
+                parse={[
+                  {
+                    type: 'url',
+                    style: { color: '#8B5CF6', textDecorationLine: 'underline', fontWeight: 'bold', fontFamily: 'GeneralSans-Regular' },
+                    onPress: handleUrlPress,
+                  },
+                ]}
+                childrenProps={{ allowFontScaling: false }}
+              >
                 {truncateMessage(message.replyTo.text, 50)}
-              </Text>
+              </ParsedText>
             </View>
           )}
           {/* Message bubble */}
-          <View style={bubbleStyle}>
-            <Text style={messageTextStyle}>{message.text}</Text>
-          </View>
+          <TouchableOpacity onLongPress={handleLongPress} activeOpacity={0.8}>
+            <View style={bubbleStyle}>
+              <ParsedText
+                style={messageTextStyle}
+                parse={[
+                  {
+                    type: 'url',
+                    style: {
+                      color: '#000000',
+                      // backgroundColor: '#3B82F6',
+                       // Blue background for URLs
+
+                      paddingHorizontal: 6,
+                      paddingVertical: 2,
+                      borderRadius: 6,
+                      fontWeight: 'bold',
+                    },
+                    onPress: handleUrlPress,
+                  },
+                ]}
+                childrenProps={{ allowFontScaling: false }}
+              >
+                {message.text}
+              </ParsedText>
+            </View>
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -1253,7 +1400,9 @@ const GroupRoomScreen = () => {
             contentContainerStyle={{ 
               padding: 12,
               flexGrow: 1,
-              justifyContent: 'flex-end'
+              justifyContent: 'flex-start',
+              paddingTop: 0, // Remove extra gap at the top
+              paddingBottom: 20,
             }}
             removeClippedSubviews={false}
             onContentSizeChange={() => {
@@ -1265,8 +1414,7 @@ const GroupRoomScreen = () => {
             {messages.length > 0 ? (
               messages.map((message, index) => {
                 const prev = messages[index - 1];
-                const showDate = !prev || formatDateHeader(message.timestamp) !== formatDateHeader(prev.timestamp);
-                
+                const showDate = !prev || formatDateHeader(message.timestamp) !== formatDateHeader(prev?.timestamp);
                 return (
                   <View key={message.id}>
                     {showDate && (
@@ -1316,6 +1464,8 @@ const GroupRoomScreen = () => {
                   color: COLORS.text,
                   textAlign: 'center',
                   marginBottom: 8,
+
+                  fontFamily: Fonts.GeneralSans.Semibold,
                 }}>
                   No messages yet
                 </Text>
@@ -1323,6 +1473,7 @@ const GroupRoomScreen = () => {
                   color: COLORS.textSecondary,
                   textAlign: 'center',
                   fontSize: 16,
+                  fontFamily: Fonts.GeneralSans.Regular,
                   lineHeight: 22,
                 }}>
                   {getMotivationalQuote(group.name)}

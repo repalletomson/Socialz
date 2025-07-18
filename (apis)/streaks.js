@@ -738,6 +738,93 @@ export const getUserStreak = async (userId) => {
   }
 };
 
+export const resetAllInactiveStreaks = async () => {
+  try {
+    const now = DateTime.now().setZone('Asia/Kolkata');
+    const today = now.startOf('day');
+    const yesterday = today.minus({ days: 1 });
+    
+    console.log(`Checking for streaks to reset. Today: ${today.toISO()}, Yesterday: ${yesterday.toISO()}`);
+    
+    // Get all users with streaks
+    const { data: allStreaks, error: fetchError } = await supabase
+      .from('streaks')
+      .select('*');
+    
+    if (fetchError) throw fetchError;
+    
+    if (!allStreaks || allStreaks.length === 0) {
+      console.log('No streaks found in database');
+      return { resetCount: 0, message: 'No streaks found' };
+    }
+    
+    // Filter users who need streak reset
+    const streaksToReset = allStreaks.filter(streak => {
+      // Skip if already reset (current_streak is 0 and no last_activity_date)
+      if (streak.current_streak === 0 && !streak.last_activity_date) {
+        return false;
+      }
+      
+      // If no last activity date, reset the streak
+      if (!streak.last_activity_date) {
+        return true;
+      }
+      
+      const lastActivityDate = DateTime.fromISO(streak.last_activity_date, { 
+        zone: 'Asia/Kolkata' 
+      }).startOf('day');
+      
+      // Reset if last activity was before yesterday
+      return lastActivityDate < yesterday;
+    });
+    
+    console.log(`Found ${streaksToReset.length} streaks to reset out of ${allStreaks.length} total streaks`);
+    
+    if (streaksToReset.length === 0) {
+      return { 
+        resetCount: 0, 
+        message: 'No inactive streaks found to reset',
+        totalStreaks: allStreaks.length 
+      };
+    }
+    
+    // Prepare reset data
+    const resetData = {
+      current_streak: 0,
+      last_activity_date: null,
+      daily_posts_count: 0,
+      daily_comments_count: 0,
+      streak_completed_today: false,
+      updated_at: now.toISO(),
+    };
+    
+    // Get user IDs to reset
+    const userIdsToReset = streaksToReset.map(streak => streak.user_id);
+    
+    // Batch update all inactive streaks
+    const { data: updatedStreaks, error: updateError } = await supabase
+      .from('streaks')
+      .update(resetData)
+      .in('user_id', userIdsToReset)
+      .select();
+    
+    if (updateError) throw updateError;
+    
+    console.log(`Successfully reset ${updatedStreaks?.length || 0} streaks`);
+    
+    return {
+      resetCount: updatedStreaks?.length || 0,
+      message: `Successfully reset ${updatedStreaks?.length || 0} inactive streaks`,
+      totalStreaks: allStreaks.length,
+      resetUserIds: userIdsToReset,
+      resetDate: now.toISO()
+    };
+    
+  } catch (error) {
+    console.error('Error resetting inactive streaks:', error);
+    throw error;
+  }
+};
 /**
  * Get streak leaderboard
  * @param {string} collegeName - Optional college filter
@@ -746,6 +833,9 @@ export const getUserStreak = async (userId) => {
  */
 export const getStreakLeaderboard = async (collegeName = null, limit = 10) => {
   try {
+
+     // --- AUTO-RESET LOGIC ---
+  
     let query = supabase
       .from('streaks')
       .select(`

@@ -1,218 +1,3 @@
-// import React, { useEffect, useState, createContext, useContext } from 'react';
-// import { AppState, StatusBar, Text, View, StyleSheet, Platform, ActivityIndicator } from 'react-native';
-// import NetInfo from '@react-native-community/netinfo';
-// import { useSegments, useRouter, Stack, Slot } from 'expo-router';
-// import ErrorBoundary from '../components/ErrorBoundary';
-// import { usePushNotifications } from '../hooks/usePushNotifications';
-// import '../global.css';
-// import { ThemeProvider } from "../context/ThemeContext"
-// import * as Font from 'expo-font';
-// import * as Linking from 'expo-linking';
-// import { useAuthStore } from '../stores/useAuthStore';
-
-// // Font context and provider
-// const FontContext = createContext({ loaded: false });
-// export function useFont() {
-//   return useContext(FontContext);
-// }
-
-// export function AppText(props) {
-//   const { loaded } = useFont();
-//   return <Text {...props} style={[{ fontFamily: loaded ? 'GeneralSans-Regular' : undefined }, props.style]}>{props.children}</Text>;
-// }
-
-// function FontProvider({ children }) {
-//   const [loaded, setLoaded] = useState(false);
-//   useEffect(() => {
-//     Font.loadAsync({
-//       'GeneralSans-Regular': require('../assets/fonts/GeneralSans-Regular.otf'),
-//       'GeneralSans-Medium': require('../assets/fonts/GeneralSans-Medium.otf'),
-//       'GeneralSans-SemiBold': require('../assets/fonts/GeneralSans-Semibold.otf'),
-//       'GeneralSans-Bold': require('../assets/fonts/GeneralSans-Bold.otf'),
-//       'GeneralSans-Light': require('../assets/fonts/GeneralSans-Light.otf'),
-//       'GeneralSans-Extralight': require('../assets/fonts/GeneralSans-Extralight.otf'),
-//       'GeneralSans-Italic': require('../assets/fonts/GeneralSans-Italic.otf'),
-//       'GeneralSans-MediumItalic': require('../assets/fonts/GeneralSans-MediumItalic.otf'),
-//       'GeneralSans-SemiboldItalic': require('../assets/fonts/GeneralSans-SemiboldItalic.otf'),
-//       'GeneralSans-BoldItalic': require('../assets/fonts/GeneralSans-BoldItalic.otf'),
-//       'GeneralSans-LightItalic': require('../assets/fonts/GeneralSans-LightItalic.otf'),
-//       'GeneralSans-ExtralightItalic': require('../assets/fonts/GeneralSans-ExtralightItalic.otf'),
-//     }).then(() => setLoaded(true));
-//   }, []);
-//   return <FontContext.Provider value={{ loaded }}>{children}</FontContext.Provider>;
-// }
-
-// function RootLayoutNav() {
-//   // const { isAuthenticated, user, isProfileComplete } = useAuth();
-//   const segments = useSegments();
-//   const router = useRouter();
-  
-//   // Initialize push notifications hook
-//   usePushNotifications();
-
-//   // Deep link handler for password reset
-//   useEffect(() => {
-//     const subscription = Linking.addEventListener('url', ({ url }) => {
-//       if (url.startsWith('socialz://reset-password')) {
-//         router.push('/(auth)/reset-password');
-//       }
-//     });
-//     return () => subscription.remove();
-//   }, [router]);
-
-//   // Show loader while auth state is loading
-//   // if (isAuthLoading) {
-//   //   return (
-//   //     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }}>
-//   //       <ActivityIndicator size="large" color="#8B5CF6" />
-//   //       <Text style={{ color: '#fff', fontSize: 32, fontWeight: 'bold', marginTop: 24, fontFamily: 'GeneralSans-Bold' }}>SocialZ</Text>
-//   //     </View>
-//   //   );
-//   // }
-
-//   // useEffect(() => {
-
-//   //   if (typeof isAuthenticated === 'undefined') return;
-    
-//   //   const inApp = segments[0] === '(root)';
-//   //   const inAuth = segments[0] === '(auth)';
-    
-//   //   if (isAuthenticated && !inApp && !inAuth) {
-//   //     // If authenticated but not in app or auth, check profile completion
-//   //     if (isProfileComplete === false) {
-//   //       router.replace('/(auth)/onboarding');
-//   //     } else if (isProfileComplete === true) {
-//   //       router.replace('/(root)/(tabs)/home');
-//   //     }
-//   //   } else if (isAuthenticated === false ) {
-//   //     router.replace('/(auth)/welcome');
-//   //   }
-//   // }, [isAuthenticated, user, isProfileComplete, segments]);
-//   // useEffect(() => {
-//   //   if (typeof isAuthenticated === 'undefined') return;
-  
-//   //   const inApp = segments[0] === '(root)';
-//   //   const inAuth = segments[0] === '(auth)';
-//   //   const authAllowed = [
-//   //     'welcome',
-//   //     'signin',
-//   //     'signup',
-//   //     'reset-password',
-//   //     'verify-otp',
-//   //     // add any other auth routes here
-//   //   ].includes(segments[1]);
-  
-//   //   if (isAuthenticated && !inApp && !inAuth) {
-//   //     if (isProfileComplete === false) {
-//   //       router.replace('/(auth)/onboarding');
-//   //     } else if (isProfileComplete === true) {
-//   //       router.replace('/(root)/(tabs)/home');
-//   //     }
-//   //   } else if (isAuthenticated === false && (!inAuth || !authAllowed)) {
-//   //     router.replace('/(auth)/welcome');
-//   //   }
-//   // }, [isAuthenticated, user, isProfileComplete, segments]);
-
-//   // Disabled Firebase user status updates during onboarding transition
-//   // // TODO: Re-enable after migrating user status to Supabase
-//   // useEffect(() => {
-//   //   if (!user || !isProfileComplete) return; // Only update status for complete profiles
-    
-//   //   // Skip Firebase updates during onboarding to prevent document errors
-//   //   console.log('User status updates disabled during onboarding transition');
-    
-//   //   // Uncomment below when ready to migrate user status to Supabase
-//   //   /*
-//   //   const userRef = doc(db, 'users', user.uid);
-
-//   //   const subscription = AppState.addEventListener('change', (nextAppState) => {
-//   //     const isOnline = nextAppState === 'active';
-//   //     updateDoc(userRef, {
-//   //       isOnline,
-//   //       lastSeen: serverTimestamp(),
-//   //     }, { merge: true }).catch(console.error);
-//   //   });
-
-//   //   return () => {
-//   //     subscription.remove();
-//   //     updateDoc(userRef, {
-//   //       isOnline: false,
-//   //       lastSeen: serverTimestamp(),
-//   //     }, { merge: true }).catch(console.error);
-//   //   };
-//   //   */
-//   // }, [user, isProfileComplete]);
-//   useEffect(() => {
-//     // Initialize auth store on first load
-//     console.log('Initializing auth store');
-//     useAuthStore.getState().initialize();
-//   }, []);
-
-
-//   return (
-//     <>
-//    <Slot />
-//       <StatusBar style="auto" />
-//   </>
-//   );
-// }
-
-// // Global Network Status Banner
-// function NetworkStatusBanner() {
-//   const [isConnected, setIsConnected] = useState(true);
-
-//   useEffect(() => {
-//     const unsubscribe = NetInfo.addEventListener(state => {
-//       setIsConnected(!!state.isConnected);
-//     });
-//     return () => unsubscribe();
-//   }, []);
-
-//   if (isConnected) return null;
-
-//   return (
-//     <View style={styles.banner} pointerEvents="none">
-//       <Text style={styles.bannerText}>No Internet Connection</Text>
-//     </View>
-//   );
-// }
-
-// const styles = StyleSheet.create({
-//   banner: {
-//     position: 'absolute',
-//     top: Platform.OS === 'android' ? 0 : 44, // below status bar on iOS
-//     left: 0,
-//     right: 0,
-//     zIndex: 9999,
-//     backgroundColor: '#EF4444',
-//     paddingVertical: 8,
-//     alignItems: 'center',
-//     justifyContent: 'center',
-//     elevation: 10,
-//   },
-//   bannerText: {
-//     color: 'white',
-//     fontWeight: 'bold',
-//     fontSize: 15,
-//     letterSpacing: 0.5,
-//   },
-// });
-
-// export default function RootLayout() {
-//   return (
-//     <FontProvider>
-//       {/* <AuthContextProvider> */}
-//         <ThemeProvider>
-//           <ErrorBoundary>
-//             <NetworkStatusBanner />
-//             <RootLayoutNav />
-//           </ErrorBoundary>
-//         </ThemeProvider>
-//       {/* </AuthContextProvider> */}
-//     </FontProvider>
-//   );
-// }
-
 import React, { useEffect, useState, createContext, useContext } from 'react';
 import { AppState, StatusBar, Text, View, StyleSheet, Platform, ActivityIndicator } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
@@ -224,6 +9,7 @@ import { ThemeProvider } from "../context/ThemeContext"
 import * as Font from 'expo-font';
 import * as Linking from 'expo-linking';
 import { useAuthStore } from '../stores/useAuthStore';
+import * as Notifications from 'expo-notifications';
 
 // Font context and provider
 const FontContext = createContext({ loaded: false });
@@ -235,6 +21,7 @@ export function AppText(props) {
   const { loaded } = useFont();
   return <Text {...props} style={[{ fontFamily: loaded ? 'GeneralSans-Regular' : undefined }, props.style]}>{props.children}</Text>;
 }
+
 
 function FontProvider({ children }) {
   const [loaded, setLoaded] = useState(false);
@@ -260,11 +47,30 @@ function FontProvider({ children }) {
 function RootLayoutNav() {
   const segments = useSegments();
   const router = useRouter();
-  
-  console.log('RootLayoutNav');
-  console.log("segments", segments);
-  // Initialize push notifications hook
+  const { forceClearBadge } = usePushNotifications();
+
+  // Initialize push notifications hook - always call this first
   usePushNotifications();
+
+  useEffect(() => {
+    // Clear badge count on app launch
+    Notifications.setBadgeCountAsync(0);
+    
+    // Handle app state changes
+    const handleAppStateChange = (nextAppState) => {
+      if (nextAppState === 'active') {
+        // Clear badge when app becomes active/foreground
+        Notifications.setBadgeCountAsync(0);
+        forceClearBadge();
+      }
+    };
+
+    // Add app state listener
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    
+    // Cleanup subscription on unmount
+    return () => subscription?.remove();
+  }, [forceClearBadge]);
 
   // Deep link handler for password reset and post sharing
   useEffect(() => {

@@ -10,9 +10,12 @@ export const useStreak = (userId) => {
   useEffect(() => {
     isMounted.current = true;
     
+    // Always set loading to false if no userId
     if (!userId) {
-      setCurrentStreak(0);
-      setLoading(false);
+      if (isMounted.current) {
+        setCurrentStreak(0);
+        setLoading(false);
+      }
       return;
     }
 

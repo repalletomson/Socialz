@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "SocialZ",
+    "name": "socialz",
     "slug": "socialz",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/logo7.svg",
+    "icon": "./assets/images/logo.png",
     "scheme": "socialz",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -13,35 +13,36 @@
       "infoPlist": {
         "UIBackgroundModes": [
           "remote-notification",
+          "remote-notification",
+          "remote-notification",
           "remote-notification"
-        ]
+        ],
+        "ITSAppUsesNonExemptEncryption": false
       },
       "bundleIdentifier": "com.r.tomson.socialz",
-      "icon": "./assets/images/logo7.svg"
+      "icon": "./assets/images/logo.png"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/logo7.svg",
+        "foregroundImage": "./assets/images/logo.png",
         "backgroundColor": "#000000"
       },
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.NOTIFICATIONS",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.NOTIFICATIONS",
         "android.permission.RECORD_AUDIO"
       ],
       "softwareKeyboardLayoutMode": "pan",
       "package": "com.student.app",
-      "icon": "./assets/images/logo7.svg"
+      "icon": "./assets/images/logo.png"
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/logo7.svg"
+      "favicon": "./assets/images/logo.png"
     },
     "splash": {
-      "image": "./assets/images/logo7.svg",
+      "image": "./assets/images/logo.png",
       "resizeMode": "contain",
       "imageWidth": 200,
       "imageHeight": 200,
@@ -52,9 +53,9 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/logo7.svg",
+          "image": "./assets/images/logo.png",
           "imageResizeMode": "contain",
-        
+          "backgroundColor": "#000000"
         }
       ],
       [
@@ -84,7 +85,7 @@
       "typedRoutes": true
     },
     "notification": {
-      "icon": "./assets/images/logo7.svg",
+      "icon": "./assets/images/logo.png",
       "color": "#8B5CF6"
     },
     "extra": {

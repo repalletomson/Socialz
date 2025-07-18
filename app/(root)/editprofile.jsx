@@ -21,7 +21,7 @@ import { MaterialIcons, Ionicons, AntDesign, Feather } from '@expo/vector-icons'
 import { useSafeNavigation } from '../../hooks/useSafeNavigation';
 import { supabase } from '../../config/supabaseConfig';
 import networkErrorHandler from '../../utiles/networkErrorHandler';
-import { Fonts, TextStyles } from '../../constants/Fonts';
+import { Fonts, getFontFamily, TextStyles } from '../../constants/Fonts';
 import { scaleSize, verticalScale } from '../../utiles/common';
 import SelectionModal from '../../components/SelectionModal';
 
@@ -29,22 +29,21 @@ const { width } = Dimensions.get('window');
 
 // 🎯 What's Your Vibe? Updated Interests with Creative Flair
 const interestOptions = [
-  { id: 'music', label: 'Music Vibes', icon: '🎧' },
-  { id: 'anime', label: 'Anime Fan', icon: '🌀' },
-  { id: 'kdrama', label: 'K-Drama Lover', icon: 'K' },
-  { id: 'photography', label: 'Shutterbug', icon: '📸' },
-  { id: 'movies', label: 'Movie Buff', icon: '🎬' },
-  { id: 'cricket', label: 'Cricket Fever', icon: '🏏' },
-  { id: 'coding', label: 'Code Wizard', icon: '💻' },
-  { id: 'gym', label: 'Gym Mode On', icon: '🏋️' },
-  { id: 'dance', label: 'Dance Floor Vibes', icon: '💃' },
+  { id: 'music', label: 'Music', icon: '🎧' },
+  { id: 'anime', label: 'Anime ', icon: '🌀' },
+  { id: 'kdrama', label: 'K-Drama Lover', icon: '' },
+  { id: 'photography', label: 'Photography', icon: '📸' },
+  { id: 'movies', label: 'Movies', icon: '🎬' },
+  { id: 'cricket', label: 'Cricket', icon: '🏏' },
+  { id: 'coding', label: 'Coding', icon: '💻' },
+  { id: 'gym', label: 'Fitness', icon: '🏋️' },
+  { id: 'dance', label: 'Dance', icon: '✨' },
   { id: 'games', label: 'Pub G', icon: '🎮' },
-  { id: 'sports', label: 'Sports Lover', icon: '🏀' },
+  { id: 'sports', label: 'Sports', icon: '🏀' },
 ];
-
 // Graduation years
 const currentYear = new Date().getFullYear();
-const passoutYears = Array.from({ length: 12 }, (_, i) => currentYear + 6 - i).reverse();
+const passoutYears = Array.from({ length: 12 }, (_, i) => 2022 + i);
 
 // Updated black theme with purple accents
 const colors = {
@@ -180,14 +179,17 @@ const EditProfile = () => {
       const { data: { user: supaUser } } = await supabase.auth.getUser();
       if (supaUser?.id) {
         const { data, error } = await supabase.from('users').select('*').eq('id', supaUser.id).single();
-        if (!error && data) setUser(data);
+        if (!error && data) {
+          setUser(data);
+          setSelectedInterests(data.interests || []); // <-- Set selectedInterests from user.interests
+        }
       }
       setLoading(false);
     }
     fetchUser();
   }, []);
 
-  if (loading) return <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: '#fff' }}>Loading...</Text></View>;
+  if (loading) return <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: '#fff' }}>Socialz.</Text></View>;
 
   const toggleInterest = (interestId) => {
     if (selectedInterests.includes(interestId)) {
@@ -349,7 +351,7 @@ const EditProfile = () => {
         showsVerticalScrollIndicator={false}
       >
         {/* Profile Image Section */}
-        <View style={{ alignItems: 'center', marginBottom: scaleSize(40) }}>
+        {/* <View style={{ alignItems: 'center', marginBottom: scaleSize(40) }}>
           {user?.profile_image ? (
             <Image
               source={{ uri: user.profile_image }}
@@ -379,17 +381,13 @@ const EditProfile = () => {
               </Text>
             </View>
           )}
-        </View>
+        </View> */}
 
         {/* Personal Information */}
-        <View style={{ marginBottom: scaleSize(32) }}>
-          <Text style={TextStyles.h3}>
-            Personal Information
-          </Text>
-
-          {/* Full Name */}
-          <View style={{ marginBottom: scaleSize(24) }}>
-            <Text style={{ ...TextStyles.body2, color: colors.text, marginBottom: 6, fontWeight: '600' }}>Full Name</Text>
+        <View style={{ marginBottom: scaleSize(20) }}>
+       {/* Full Name */}
+          <View style={{ marginBottom: scaleSize(10) }}>
+            <Text style={{ ...TextStyles.body2, color: colors.text, marginBottom:2, fontWeight: '600' }}>Full Name</Text>
             <View style={{
               backgroundColor: colors.inputBg,
               borderRadius: scaleSize(16),
@@ -413,7 +411,7 @@ const EditProfile = () => {
           </View>
 
           {/* Username */}
-          <View style={{ marginBottom: scaleSize(24) }}>
+          <View style={{ marginBottom: scaleSize(10) }}>
             <Text style={{ ...TextStyles.body2, color: colors.text, marginBottom: 6, fontWeight: '600' }}>Username</Text>
             <View style={{
               backgroundColor: colors.inputBg,
@@ -438,7 +436,7 @@ const EditProfile = () => {
           </View>
 
           {/* Bio */}
-          <View style={{ marginBottom: scaleSize(24) }}>
+          <View style={{ marginBottom: scaleSize(10) }}>
             <Text style={{ ...TextStyles.body2, color: colors.text, marginBottom: 6, fontWeight: '600' }}>Bio</Text>
             <View style={{
               backgroundColor: colors.inputBg,
@@ -462,7 +460,7 @@ const EditProfile = () => {
           </View>
 
           {/* Email (Read-only) */}
-          <View style={{ marginBottom: scaleSize(24) }}>
+          <View style={{ marginBottom: scaleSize(10) }}>
             <Text style={{ ...TextStyles.body2, color: colors.text, marginBottom: 6, fontWeight: '600' }}>Email</Text>
             <View style={{
               backgroundColor: colors.cardBg,
@@ -484,65 +482,52 @@ const EditProfile = () => {
         </View>
 
         {/* Interests Selection */}
-        <View style={{ marginBottom: scaleSize(32) }}>
+        <View style={{ marginBottom: scaleSize(10) }}>
           <Text style={TextStyles.h4}>
-            Interests
+            Interested In
           </Text>
           <Text style={TextStyles.body3}>
             Select up to 10 interests ({selectedInterests.length}/10 selected)
           </Text>
 
-          <View style={{
-            flexDirection: 'row',
-            flexWrap: 'wrap',
-            marginHorizontal: -scaleSize(4),
-          }}>
-            {interestOptions.map((interest) => (
-              <TouchableOpacity
-                key={interest.id}
-                onPress={() => toggleInterest(interest.id)}
-                style={{
-                  backgroundColor: selectedInterests.includes(interest.id) 
-                    ? colors.selectedBg 
-                    : colors.unselectedBg,
-                  paddingHorizontal: scaleSize(16),
-                  paddingVertical: scaleSize(10),
-                  borderRadius: scaleSize(20),
-                  margin: scaleSize(4),
-                  borderWidth: 1.5,
-                  borderColor: selectedInterests.includes(interest.id) 
-                    ? colors.selectedBorder 
-                    : colors.unselectedBorder,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  minHeight: scaleSize(36),
-                  shadowColor: selectedInterests.includes(interest.id) ? colors.selectedBorder : 'transparent',
-                  shadowOffset: { width: 0, height: scaleSize(2) },
-                  shadowOpacity: selectedInterests.includes(interest.id) ? 0.3 : 0,
-                  shadowRadius: scaleSize(8),
-                  elevation: selectedInterests.includes(interest.id) ? 4 : 0,
-                }}
-              >
-                <Text style={{ fontSize: scaleSize(14), marginRight: scaleSize(6) }}>
-                  {interest.icon}
-                </Text>
-                <Text style={TextStyles.body3}>
-                  {interest.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 16, marginBottom: 32 }}>
+            {interestOptions.map(option => {
+              const selected = selectedInterests.includes(option.id);
+              return (
+                <TouchableOpacity
+                  key={option.id}
+                  onPress={() => toggleInterest(option.id)}
+                  style={{
+                    backgroundColor: selected ? colors.selectedBg : colors.unselectedBg,
+                    borderColor: selected ? colors.selectedBorder : colors.unselectedBorder,
+                    borderWidth: 1.5,
+                    borderRadius: 20,
+                    paddingVertical: 8,
+                    paddingHorizontal: 16,
+                    margin: 4,
+                  }}
+                >
+                  <Text style={{
+                    color: selected ? colors.selectedText : colors.unselectedText,
+                    fontWeight: selected ? 'bold' : 'normal',
+                  }}>
+                    {option.icon} {option.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
 
         {/* Education Details */}
-        <View style={{ marginBottom: scaleSize(40) }}>
-          <Text style={TextStyles.h3}>
+        <View style={{ marginBottom: scaleSize(20) }}>
+          <Text style={{ fontFamily: 'GeneralSans-Bold', fontSize: scaleSize(20), color: colors.text, marginBottom: scaleSize(12) }}>
             Education Details
           </Text>
 
           {/* College/University Input */}
           <View style={{ marginBottom: verticalScale(24) }}>
-            <Text style={TextStyles.label}>
+            <Text style={{ fontFamily: 'GeneralSans-Medium', fontSize: 15, color: colors.text, marginBottom: 6 }}>
               College / University
             </Text>
             <TouchableOpacity
@@ -565,6 +550,7 @@ const EditProfile = () => {
                 fontSize: 17,
                 marginLeft: scaleSize(16),
                 fontWeight: '500',
+                fontFamily: 'GeneralSans-Regular',
               }}>
                 {user?.college || 'Select your college'}
               </Text>
@@ -612,7 +598,7 @@ const EditProfile = () => {
 
           {/* Branch/Course Input */}
           <View style={{ marginBottom: verticalScale(24) }}>
-            <Text style={TextStyles.label}>
+            <Text style={{ fontFamily: 'GeneralSans-Medium', fontSize: 15, color: colors.text, marginBottom: 6 }}>
               Branch / Course
             </Text>
             <TouchableOpacity
@@ -635,6 +621,7 @@ const EditProfile = () => {
                 fontSize: 17,
                 marginLeft: scaleSize(16),
                 fontWeight: '500',
+                fontFamily: 'GeneralSans-Regular',
               }}>
                 {user?.branch || 'Select your branch'}
               </Text>
@@ -679,10 +666,9 @@ const EditProfile = () => {
               }}
             />
           )}
-
           {/* Graduation Year */}
           <View style={{ marginBottom: scaleSize(24) }}>
-            <Text style={TextStyles.body2}>
+            <Text style={{ fontFamily: 'GeneralSans-Medium', fontSize: 15, color: colors.text, marginBottom: 6 }}>
               Expected Graduation Year
             </Text>
             <TouchableOpacity
@@ -705,6 +691,7 @@ const EditProfile = () => {
                 fontSize: scaleSize(17),
                 marginLeft: scaleSize(16),
                 fontWeight: '500',
+                fontFamily: 'GeneralSans-Regular',
               }}>
                 {user?.passout_year || 'Select graduation year'}
               </Text>

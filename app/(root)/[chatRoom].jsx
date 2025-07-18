@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, ScrollView, SafeAreaView, Text, TouchableOpacity, 
   ActivityIndicator, KeyboardAvoidingView, Platform, Animated, StatusBar,
-  Alert, Modal, Dimensions, TextInput, Image
+  Alert, Modal, Dimensions, TextInput, Image, Linking
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { 
@@ -24,6 +24,7 @@ import {
 import { AES, enc } from 'react-native-crypto-js';
 import { useAuthStore } from '../../stores/useAuthStore';
 import networkErrorHandler from '../../utiles/networkErrorHandler';
+import ParsedText from 'react-native-parsed-text';
 // import Clipboard from 'expo-clipboard';
 
 dayjs.extend(relativeTime);
@@ -251,6 +252,7 @@ export default function ChatRoom() {
   const [actionModalVisible, setActionModalVisible] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [hasBlockedMe, setHasBlockedMe] = useState(false);
+  const [recipientExists, setRecipientExists] = useState(true);
 
   const currentUserId = user?.id;
 
@@ -386,8 +388,14 @@ export default function ChatRoom() {
         const recipientData = await fetchUserFromSupabase(recipientId);
         if (recipientData) {
           setRecipient(recipientData);
+          setRecipientExists(true);
+        } else {
+          setRecipient(null);
+          setRecipientExists(false);
         }
       } catch (error) {
+        setRecipient(null);
+        setRecipientExists(false);
         networkErrorHandler.showErrorToUser(error);
       } finally {
         setLoading(false);
@@ -444,6 +452,32 @@ export default function ChatRoom() {
     markAsRead();
   }, [chatId, currentUserId]);
 
+  // Real-time block status effect
+  useEffect(() => {
+    if (!currentUserId || !recipientId) return;
+    const currentUserRef = doc(db, 'users', currentUserId);
+    const recipientUserRef = doc(db, 'users', recipientId);
+    const unsubCurrent = onSnapshot(currentUserRef, (snap) => {
+      const blocked = snap.data()?.blockedUsers || [];
+      setIsBlocked(blocked.includes(recipientId));
+    });
+    const unsubRecipient = onSnapshot(recipientUserRef, (snap) => {
+      const blocked = snap.data()?.blockedUsers || [];
+      setHasBlockedMe(blocked.includes(currentUserId));
+    });
+    return () => {
+      unsubCurrent();
+      unsubRecipient();
+    };
+  }, [currentUserId, recipientId]);
+
+  // Filter messages based on block status
+  const filteredMessages = messages.filter(
+    msg =>
+      !(isBlocked && msg.senderId === recipientId) &&
+      !(hasBlockedMe && msg.senderId === currentUserId)
+  );
+
   const scrollToBottom = () => {
     scrollViewRef.current?.scrollToEnd({ animated: true });
   };
@@ -489,8 +523,13 @@ export default function ChatRoom() {
     }
   };
 
+  // Prevent sending messages if blocked
   const handleSendMessage = async () => {
     if (!messageText.trim() || !currentUserId) return;
+    if (isBlocked || hasBlockedMe) {
+      Alert.alert('Blocked', 'You cannot send messages to this user.');
+      return;
+    }
     
     try {
       const messageData = {
@@ -555,9 +594,14 @@ export default function ChatRoom() {
     });
   };
 
+  const handleUrlPress = (url) => {
+    Linking.openURL(url);
+  };
+
   // Enhanced Message Bubble Component to match the image design
   const MessageBubble = React.memo(({ message }) => {
     const isCurrentUser = message.senderId === currentUserId || message.sender === currentUserId;
+    const messageTextColor = isCurrentUser ? '#fff' : '#E5E7EB'; // white for sent, light gray for received
 
     return (
       <View style={{
@@ -566,32 +610,56 @@ export default function ChatRoom() {
         maxWidth: width * 0.75,
         marginHorizontal: 16,
       }}>
-        <View style={{
-          backgroundColor: isCurrentUser ? COLORS.messageOwn : COLORS.messageOther,
-          paddingHorizontal: 12,
-          paddingVertical: 8,
-          borderRadius: 18,
-          position: 'relative',
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onLongPress={() => handleLongPressMessage(message)}
+        >
+          <View style={{
+            backgroundColor: isCurrentUser ? '#8B5CF6' : COLORS.messageOther, // Sent bubble is purple
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            borderRadius: 18,
+            position: 'relative',
+          }}>
+            {/* Sender name for received messages */}
+            {/* {!isCurrentUser && message.name && (
+              <Text style={{
+                color: '#FF69B4', // Pink
+                fontWeight: 'bold',
+                fontSize: 13,
+                marginBottom: 2,
+                fontFamily: 'GeneralSans-Medium',
+              }}>
+                {message.name.split(' ')[0]}
+              </Text>
+            )} */}
+            <ParsedText
+              style={{
+                color: messageTextColor,
+                fontSize: 13,
+                marginTop: 1,
+                fontFamily: 'GeneralSans-Regular',
+              }}
+              parse={[
+                { type: 'url', style: { color: isCurrentUser ? '#fff' : COLORS.accent, textDecorationLine: 'underline' }, onPress: handleUrlPress },
+              ]}
+              childrenProps={{ allowFontScaling: false }}
+            >
+              {message.text || message.content}
+            </ParsedText>
+          </View>
+        </TouchableOpacity>
+        {/* Time at bottom right, outside bubble */}
+        <Text style={{
+          color: isCurrentUser ? '#E0E0E0' : '#A1A1AA',
+          fontSize: 11,
+          alignSelf: 'flex-end',
+          marginTop: 2,
+          fontFamily: 'GeneralSans-Regular',
+          marginRight: 2,
         }}>
-          <Text style={{
-            color: '#FFFFFF',
-            fontSize: 14,
-            lineHeight: 20,
-            fontFamily: isCurrentUser ? 'GeneralSans-Medium' : 'GeneralSans-Regular',
-          }}>
-            {message.text || message.content}
-          </Text>
-          
-          {/* <Text style={{
-            color: isCurrentUser ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.6)',
-            fontSize: 12,
-            marginTop: 4,
-            alignSelf: 'flex-end',
-            fontFamily: 'GeneralSans-Regular',
-          }}>
-            {formatMessageTime(message.timestamp)}
-          </Text> */}
-        </View>
+          {formatMessageTime(message.timestamp)}
+        </Text>
       </View>
     );
   });
@@ -632,7 +700,7 @@ export default function ChatRoom() {
           fontSize: 17,
           fontWeight: '600',
           color: COLORS.text,
-          fontFamily: 'GeneralSans-Medium',
+          fontFamily: 'GeneralSans-Regular',
         }}>
           {recipient?.fullName || 'Chat'}
         </Text>
@@ -671,11 +739,54 @@ export default function ChatRoom() {
   const handleDeleteMessage = async () => {
     if (!selectedMessage) return;
     try {
+      // Mark the message as deleted
       await updateDoc(doc(db, 'chats', chatId, 'messages', selectedMessage.id), { text: '', content: '', deleted: true });
+
+      // Fetch the latest non-deleted message
+      let messagesQuery = query(
+        collection(db, 'chats', chatId, 'messages'),
+        where('deleted', '==', false),
+        orderBy('timestamp', 'desc'),
+        limit(1)
+      );
+      let snapshot = await getDocs(messagesQuery);
+
+      // If no non-deleted messages, try legacy (no 'deleted' field)
+      if (snapshot.empty) {
+        messagesQuery = query(
+          collection(db, 'chats', chatId, 'messages'),
+          orderBy('timestamp', 'desc'),
+          limit(1)
+        );
+        snapshot = await getDocs(messagesQuery);
+        // Only use if message has no 'deleted' or is falsy
+        if (!snapshot.empty) {
+          const msg = snapshot.docs[0].data();
+          if (msg.deleted) {
+            snapshot = { empty: true };
+          }
+        }
+      }
+
+      let newLastMessage = '';
+      let newLastMessageTime = null;
+      if (!snapshot.empty) {
+        const msg = snapshot.docs[0].data();
+        newLastMessage = msg.text || msg.content || '';
+        newLastMessageTime = msg.timestamp;
+      }
+
+      // Update the chat document
+      await updateDoc(doc(db, 'chats', chatId), {
+        lastMessage: newLastMessage,
+        lastMessageTime: newLastMessageTime || null,
+      });
+
       setActionModalVisible(false);
       Alert.alert('Deleted', 'Message deleted');
     } catch (error) {
-      Alert.alert('Error', 'Failed to delete message');
+      console.error('Failed to delete message:', error);
+      Alert.alert('Error', error.message || 'Failed to delete message');
     }
   };
 
@@ -727,6 +838,21 @@ export default function ChatRoom() {
     );
   }
 
+  if (!recipientExists) {
+    return (
+      <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background }}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
+        <Ionicons name="alert-circle-outline" size={48} color={COLORS.danger} style={{ marginBottom: 16 }} />
+        <Text style={{ color: COLORS.danger, fontSize: 18, fontWeight: '700', marginBottom: 8 }}>
+          User no longer exists
+        </Text>
+        <Text style={{ color: COLORS.textSecondary, fontSize: 15, textAlign: 'center', marginHorizontal: 24 }}>
+          This user has deleted their account. You can no longer send or receive messages in this chat.
+        </Text>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={{ flex: 1, backgroundColor: COLORS.background }}>
@@ -741,86 +867,33 @@ export default function ChatRoom() {
           style={{ flex: 1, backgroundColor: COLORS.background }}
           contentContainerStyle={{
             flexDirection: 'column',
-            justifyContent: 'flex-end',
-            paddingTop: 20,
+            justifyContent: 'flex-start',
+            paddingTop: 0, // Remove extra gap at the top
             paddingBottom: 20,
             minHeight: '100%',
           }}
           onContentSizeChange={() => scrollToBottom()}
           showsVerticalScrollIndicator={false}
-          inverted
+          // inverted
         >
-          {messages
+          {filteredMessages
             .filter(message => !message.deleted && (message.text || message.content || message.message || message.body))
             .map((message, index, arr) => {
-            const prev = arr[index - 1];
-            const showDate = !prev || formatDateHeader(message.timestamp) !== formatDateHeader(prev?.timestamp);
-            return (
-              <View key={message.id}>
-                {showDate && (
-                  <View style={{ alignItems: 'center', marginVertical: 20 }}>
-                    <Text style={{ color: COLORS.textSecondary, fontSize: 15, fontWeight: '600', fontFamily: 'GeneralSans-Medium' }}>
-                      {formatDateHeader(message.timestamp)}
-                    </Text>
-                  </View>
-                )}
-                <View>
-                  <View style={{
-                    flexDirection: message.senderId === currentUserId ? "row-reverse" : "row",
-                    alignItems: "flex-end",
-                    marginHorizontal: 16,
-                    marginVertical: 4,
-                  }}>
-                    <View style={{ 
-                      alignItems: message.senderId === currentUserId ? "flex-end" : "flex-start",
-                      maxWidth: "80%",
-                    }}>
-                      {/* Message Bubble */}
-                      <TouchableOpacity onLongPress={() => handleLongPressMessage(message)} activeOpacity={0.8}>
-                        <View style={{
-                          backgroundColor: message.senderId === currentUserId ? COLORS.accent : COLORS.messageOther,
-                          borderRadius: 16,
-                          paddingHorizontal: 12,
-                          paddingVertical: 8,
-                          borderTopRightRadius: message.senderId === currentUserId ? 4 : 16,
-                          borderTopLeftRadius: message.senderId === currentUserId ? 16 : 4,
-                          shadowColor: "#000",
-                          shadowOffset: { width: 0, height: 1 },
-                          shadowOpacity: 0.05,
-                          shadowRadius: 1,
-                          elevation: 1,
-                          maxWidth: "100%",
-                        }}>
-                          <Text style={{ 
-                            fontSize: 13, 
-                            color: "#FFFFFF", 
-                            lineHeight: 18,
-                            fontWeight: "400",
-                          }}>
-                            {message.text || message.content || message.message || message.body || "No content"}
-                          </Text>
-                        </View>
-                      </TouchableOpacity>
-                      {/* Timestamp */}
-                      <View style={{
-                        alignItems: message.senderId === currentUserId ? "flex-end" : "flex-start",
-                        marginTop: 4,
-                        marginHorizontal: 4,
-                      }}>
-                        <Text style={{ 
-                          fontSize: 10, 
-                          color: COLORS.textSecondary,
-                          fontWeight: "400",
-                        }}>
-                          {formatMessageTime(message.timestamp)}
-                        </Text>
-                      </View>
+              const prev = arr[index - 1];
+              const showDate = !prev || formatDateHeader(message.timestamp) !== formatDateHeader(prev?.timestamp);
+              return (
+                <View key={message.id}>
+                  {showDate && (
+                    <View style={{ alignItems: 'center', marginVertical: 20 }}>
+                      <Text style={{ color: COLORS.textSecondary, fontSize: 15, fontWeight: '600', fontFamily: 'GeneralSans-Medium' }}>
+                        {formatDateHeader(message.timestamp)}
+                      </Text>
                     </View>
-                  </View>
+                  )}
+                  <MessageBubble message={message} />
                 </View>
-              </View>
-            );
-          })}
+              );
+            })}
         </ScrollView>
 
         {/* Message Input - KeyboardAvoidingView only wraps input */}

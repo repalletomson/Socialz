@@ -46,7 +46,7 @@ const motivationalCards = [
   },
   {
     id: 2,
-    title: "Chat with friends and Connect ",
+    title: "Chat with friends  ",
     subtitle: "Find people from different colleges",
     icon: "chatbubbles-outline",
     gradient: ['#2E2E2E', '#708090', '#A3BFD9'], // Charcoal Gray → Slate Gray → Blur Blue
@@ -161,7 +161,7 @@ const MotivationalCarousel = () => {
                 fontFamily: Fonts.GeneralSans.Bold,
                 color: '#FFFFFF',
                 lineHeight: width > 380 ? 22 : 20,
-                marginBottom: 4,
+                marginBottom: 6,
                 textShadowColor: 'rgba(0, 0, 0, 0.5)',
                 textShadowOffset: { width: 0, height: 1 },
                 textShadowRadius: 2,

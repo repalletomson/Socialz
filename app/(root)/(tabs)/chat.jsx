@@ -35,7 +35,6 @@ import {
 } from 'firebase/firestore';
 
 import { router } from 'expo-router';
-import { useAuthStore } from '../../../stores/useAuthStore';
 import { db } from '../../../config/firebaseConfig';
 import { supabase } from '../../../config/supabaseConfig';
 import { formatMessageTime } from '../../../utiles/dateFormat';
@@ -48,7 +47,7 @@ import networkErrorHandler from '../../../utiles/networkErrorHandler';
 import { Fonts, TextStyles } from '../../../constants/Fonts';
 import { scaleSize, verticalScale } from '../../../utiles/common';
 import { useFocusEffect } from '@react-navigation/native';
-
+import { useAuthStore } from '../../../stores/useAuthStore';
 const DEFAULT_PROFILE='https://assets.grok.com/users/8c354dfe-946c-4a32-b2de-5cb3a8ab9776/generated/h4epnwdFODX6hW0L/image.jpg';
 
 // Updated WhatsApp-like dark theme colors
@@ -70,7 +69,6 @@ const COLORS = {
   unreadBackground: '#09090B',
   searchBackground: '#1A1A1A',
   separator: '#27272A',
-  // Additional dark theme colors for consistency
   textMuted: '#6B7280',
   textInverse: '#000000',
   overlay: 'rgba(0, 0, 0, 0.8)',
@@ -87,8 +85,9 @@ const SECRET_KEY = "kliq-secure-messaging-2024";
 
 export default function ChatList() {
   const { user, isAuthenticated } = useAuthStore();
-  const [chats, setChats] = useState([]);
+  // const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [chats, setChats] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -106,26 +105,38 @@ export default function ChatList() {
   const { safeNavigate, safeBack } = useSafeNavigation({
     modals: [
       () => showNewChatModal && setShowNewChatModal(false),
-      // Add other modal close functions here if needed
     ],
-    onCleanup: () => {
-      // Clean up any FlatList or state here
-    }
+    onCleanup: () => {}
   });
 
-  // Remove early return for !user?.uid
-  // Instead, use a variable to conditionally render loading UI
-  const showLoading = !isAuthenticated || !user?.id;
-
-  if (showLoading) return <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: '#fff' }}>Loading...</Text></View>;
-
-  // chats.js (only showing the unread count retrieval part)
+  // Fetch user from supabase.auth.getUser() on mount
   useEffect(() => {
-    // Guard against null user
+    let isMounted = true;
+    async function fetchUser() {
+      setLoading(true);
+      try {
+        const { data: { user: supaUser }, error } = await supabase.auth.getUser();
+        if (error) throw error;
+        if (isMounted) setUser(supaUser);
+      } catch (err) {
+        if (isMounted) setUser(null);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+    fetchUser();
+    return () => { isMounted = false; };
+  }, []);
+
+  // Early return/loading UI
+
+
+  // chats.js (unread count retrieval)
+  useEffect(() => {
     if (!user?.id) return;
-    
+    // console.log("user",user);
     const q = query(
-      collection(db, "unreadCounts", user.id, "senders")
+      collection(db, "unreadCounts", user?.id, "senders")
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const counts = {};
@@ -166,13 +177,24 @@ export default function ChatList() {
     try {
       const { data, error } = await supabase
         .from('users')
-        .select('*') // Fetch all fields from users table
+        .select('*')
         .eq('id', userId)
         .single();
 
-      if (error) {
-        console.error('Error fetching user from Supabase:', error);
-        return null;
+      if (error || !data) {
+        // User not found, return fallback
+        return {
+          id: userId,
+          fullName: 'Unknown User',
+          full_name: 'Unknown User',
+          displayName: 'Unknown User',
+          username: 'unknown',
+          profileImage: DEFAULT_PROFILE,
+          profile_image: DEFAULT_PROFILE,
+          photoURL: DEFAULT_PROFILE,
+          college: null,
+          branch: null,
+        };
       }
 
       return {
@@ -187,42 +209,41 @@ export default function ChatList() {
         photoURL: data.profile_image,
         college: data.college,
         branch: data.branch,
-        passout_year: data.passout_year,
-        bio: data.bio,
-        about: data.bio,
-        profile_initials: data.profile_initials,
-        interests: data.interests,
-        created_at: data.created_at,
-        updated_at: data.updated_at,
-        expo_push_token: data.expo_push_token,
-        lastSeen: data.last_seen ? new Date(data.last_seen) : null,
-        isOnline: data.is_online || false
       };
     } catch (error) {
-      console.error('Error fetching user from Supabase:', error);
-      return null;
+      // On error, return fallback
+      return {
+        id: userId,
+        fullName: 'Unknown User',
+        full_name: 'Unknown User',
+        displayName: 'Unknown User',
+        username: 'unknown',
+        profileImage: DEFAULT_PROFILE,
+        profile_image: DEFAULT_PROFILE,
+        photoURL: DEFAULT_PROFILE,
+        college: null,
+        branch: null,
+      };
     }
   };
 
   const loadChats = useCallback(async () => {
     try {
       setLoading(true);
-      
-      // Check if user is authenticated
+      console.log("user",user);
       if (!user?.id) {
         throw new Error('User not authenticated');
       }
 
-      // Enhanced query to capture all chats including newly created ones
-      const chatsQuery = query( 
+      const chatsQuery = query(
         collection(db, 'chats'),
         where('participants', 'array-contains', user.id)
-        // Removed orderBy to ensure all chats are captured first
       );
       
       chatsUnsubscribe.current = onSnapshot(chatsQuery, async (snapshot) => {
         try {
           console.log(`📥 Chat listener triggered - ${snapshot.docs.length} chats found`);
+          
           
           const chatPromises = snapshot.docs.map(async (doc) => {
             const chatData = doc.data();
@@ -251,7 +272,6 @@ export default function ChatList() {
 
           const populatedChats = (await Promise.all(chatPromises)).filter(Boolean);
           
-          // Sort chats by lastMessageTime in memory (after fetching)
           populatedChats.sort((a, b) => {
             const timeA = a.lastMessageTime?.toDate?.() || a.lastMessageTime || new Date(0);
             const timeB = b.lastMessageTime?.toDate?.() || b.lastMessageTime || new Date(0);
@@ -263,22 +283,6 @@ export default function ChatList() {
           if (mounted.current) {
             setError(null);
           }
-
-          // Setup unread counts listener
-          const unreadQ = query(
-            collection(db, "unreadCounts", user.id, "senders")
-          );
-          const unreadUnsubscribe = onSnapshot(unreadQ, (snapshot) => {
-            const counts = {};
-            snapshot.docs.forEach((doc) => {
-              counts[doc.id] = doc.data().count;
-            });
-            setUnreadCounts(counts);
-          });
-
-          return () => {
-            unreadUnsubscribe();
-          };
         } catch (err) {
           if (mounted.current) {
             console.error("Error loading chat details:", err);
@@ -316,7 +320,6 @@ export default function ChatList() {
     };
   }, [loadChats]);
 
-  // Modified handleSearch to fetch all users from Supabase instead of Firebase
   const handleSearch = useCallback(async (queryText) => {
     if (!queryText.trim() || !user?.id) {
       setSearchResults([]);
@@ -328,7 +331,6 @@ export default function ChatList() {
     try {
       console.log('🔍 Searching for users with query:', queryText);
       
-      // Query all users from Supabase with multiple search fields
       const { data: usersData, error } = await supabase
         .from('users')
         .select(`
@@ -342,8 +344,7 @@ export default function ChatList() {
           bio
         `)
         .neq('id', user.id)
-        .or(`full_name.ilike.%${queryText}%,username.ilike.%${queryText}%,branch.ilike.%${queryText}%`)
-        .limit(20);
+        .or(`full_name.ilike.%${queryText}%,username.ilike.%${queryText}%,branch.ilike.%${queryText}%`);
 
       if (error) {
         console.error('❌ Supabase search error:', error);
@@ -353,11 +354,9 @@ export default function ChatList() {
 
       console.log(`✅ Found ${usersData?.length || 0} users matching "${queryText}"`);
       
-      // Transform data for compatibility
       const transformedUsers = usersData?.map(userData => ({
         id: userData.id,
-        userId: userData.id, // For compatibility
-        // uid: userData.id, // For compatibility
+        userId: userData.id,
         fullName: userData.full_name,
         full_name: userData.full_name,
         displayName: userData.full_name,
@@ -381,9 +380,8 @@ export default function ChatList() {
     } finally {
       setSearching(false);
     }
-  }, [user?.uid]);
+  }, [user?.id]);
 
-  // Search debouncing effect - fix: use 500ms debounce, only show results after user stops typing
   useEffect(() => {
     if (searchTimeout.current) {
       clearTimeout(searchTimeout.current);
@@ -396,7 +394,7 @@ export default function ChatList() {
     setSearching(true);
     searchTimeout.current = setTimeout(() => {
       handleSearch(searchQuery);
-    }, 500); // 500ms debounce
+    }, 500);
     return () => {
       if (searchTimeout.current) clearTimeout(searchTimeout.current);
     };
@@ -406,17 +404,14 @@ export default function ChatList() {
     try {
       setLoading(true);
       
-      // Ensure chatId is valid
       if (!chatId) {
         throw new Error("Invalid chatId");
       }
   
-      // Delete messages
       const messagesRef = collection(db, 'chats', chatId, 'messages');
       const messagesSnapshot = await getDocs(messagesRef);
       await Promise.all(messagesSnapshot.docs.map(doc => deleteDoc(doc.ref)));
   
-      // Delete chat document
       await deleteDoc(doc(db, 'chats', chatId));
   
       setShowDeleteModal(false);
@@ -465,7 +460,7 @@ export default function ChatList() {
           lastMessageTime: serverTimestamp(),
           lastMessage: null,
           lastSender: null,
-          type: 'direct', // Add type for clarity
+          type: 'direct',
           unreadCount: 0
         };
 
@@ -473,7 +468,6 @@ export default function ChatList() {
         
         console.log('✅ New chat created successfully:', newChatRef.id);
 
-        // Navigate to the new chat
         router.push({
           pathname: '/(root)/[chatRoom]',
           params: { 
@@ -482,7 +476,6 @@ export default function ChatList() {
           }
         });
         
-        // Force refresh chat list after a short delay to ensure the new chat appears
         setTimeout(() => {
           loadChats();
         }, 500);
@@ -556,7 +549,6 @@ export default function ChatList() {
     return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
   };
 
-  // Modern Header Component
   const Header = () => (
     <View style={{
       backgroundColor: COLORS.headerBg,
@@ -576,99 +568,96 @@ export default function ChatList() {
         justifyContent: 'space-between',
         alignItems: 'center',
       }}>
-        {/* Chat Title */}
         <AppText style={{
           fontSize: scaleSize(34),
           fontFamily: Fonts.GeneralSans.Bold,
           color: COLORS.textPrimary,
           letterSpacing: 0.4,
         }}>
-          Chat
+          Chats
         </AppText>
-        
-        {/* Action Buttons */}
-        <View style={{ flexDirection: 'row', gap: scaleSize(12) }}>
-          {/* New Chat Button */}
-          <TouchableOpacity
+        <TouchableOpacity
             onPress={() => setShowNewChatModal(true)}
             style={{
-              width: scaleSize(44),
-              height: scaleSize(44),
-              borderRadius: scaleSize(22),
+              position: 'absolute',
+              right: 10,
+              // bottom: 10,
+              width: 50,
+              height: 50,
+              borderRadius: 30,
               backgroundColor: COLORS.primary,
               justifyContent: 'center',
               alignItems: 'center',
               shadowColor: COLORS.primary,
-              shadowOffset: { width: 0, height: 2 },
+              shadowOffset: { width: 0, height: 4 },
               shadowOpacity: 0.3,
-              shadowRadius: 4,
-              elevation: 3,
+              shadowRadius: 8,
+              elevation: 8,
+              zIndex: 100,
             }}
+            activeOpacity={0.85}
           >
-            <Ionicons name="create-outline" size={scaleSize(22)} color={COLORS.background} />
+            <Ionicons name="create-outline" size={32} color="#fff" />
           </TouchableOpacity>
-        </View>
+        {/* Remove the New Chat button from the header */}
       </View>
     </View>
   );
 
-  // Modern Search Bar Component
-  const SearchBar = () => (
-    <View style={{
-      backgroundColor: COLORS.background,
-      paddingHorizontal: scaleSize(20),
-      paddingVertical: verticalScale(16),
-    }}>
-      <View style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: COLORS.searchBackground,
-        borderRadius: scaleSize(16),
-        paddingHorizontal: scaleSize(16),
-        paddingVertical: verticalScale(12),
-        borderWidth: 1,
-        borderColor: COLORS.border,
-        shadowColor: COLORS.shadow,
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 1,
-        shadowRadius: scaleSize(2),
-        elevation: 1,
-      }}>
-        <Ionicons name="search-outline" size={scaleSize(20)} color={COLORS.textSecondary} />
-        <TextInput
-          style={{
-            flex: 1,
-            marginLeft: scaleSize(12),
-            fontSize: scaleSize(16),
-            color: COLORS.textPrimary,
-            fontFamily: 'System',
-            letterSpacing: 0.3,
-          }}
-          placeholder="Search chat..."
-          placeholderTextColor={COLORS.textSecondary}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-        {searching ? (
-          <ActivityIndicator size="small" color={COLORS.primary} />
-        ) : searchQuery ? (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Ionicons name="close-circle" size={scaleSize(20)} color={COLORS.textSecondary} />
-          </TouchableOpacity>
-        ) : null}
-      </View>
-    </View>
-  );
+  // const SearchBar = () => (
+  //   <View style={{
+  //     backgroundColor: COLORS.background,
+  //     paddingHorizontal: scaleSize(20),
+  //     paddingVertical: verticalScale(16),
+  //   }}>
+  //     <View style={{
+  //       flexDirection: 'row',
+  //       alignItems: 'center',
+  //       backgroundColor: COLORS.searchBackground,
+  //       borderRadius: scaleSize(16),
+  //       paddingHorizontal: scaleSize(16),
+  //       paddingVertical: verticalScale(12),
+  //       borderWidth: 1,
+  //       borderColor: COLORS.border,
+  //       shadowColor: COLORS.shadow,
+  //       shadowOffset: { width: 0, height: 1 },
+  //       shadowOpacity: 1,
+  //       shadowRadius: scaleSize(2),
+  //       elevation: 1,
+  //     }}>
+  //       <Ionicons name="search-outline" size={scaleSize(20)} color={COLORS.textSecondary} />
+  //       <TextInput
+  //         style={{
+  //           flex: 1,
+  //           marginLeft: scaleSize(12),
+  //           fontSize: scaleSize(16),
+  //           color: COLORS.textPrimary,
+  //           fontFamily: 'System',
+  //           letterSpacing: 0.3,
+  //         }}
+  //         placeholder="Search chat..."
+  //         placeholderTextColor={COLORS.textSecondary}
+  //         value={searchQuery}
+  //         onChangeText={setSearchQuery}
+  //       />
+  //       {searching ? (
+  //         <ActivityIndicator size="small" color={COLORS.primary} />
+  //       ) : searchQuery ? (
+  //         <TouchableOpacity onPress={() => setSearchQuery('')}>
+  //           <Ionicons name="close-circle" size={scaleSize(20)} color={COLORS.textSecondary} />
+  //         </TouchableOpacity>
+  //       ) : null}
+  //     </View>
+  //   </View>
+  // );
 
   function handleDecrypt(text) {
     let decryptedText = "";
   
-    // Decrypt the last message text if it exists
     if (text) {
       try {
         decryptedText = AES.decrypt(text, SECRET_KEY).toString(enc.Utf8);
 
-        console.log(decryptedText)
         if (!decryptedText) {
           decryptedText = "[Decryption Failed]";
         }
@@ -682,7 +671,6 @@ export default function ChatList() {
     return "";
   }
 
-  // Modern Chat Item Component with tap animation
   const ChatItem = ({ item }) => {
     const scaleAnim = useRef(new Animated.Value(1)).current;
 
@@ -692,10 +680,10 @@ export default function ChatList() {
         useNativeDriver: true,
         speed: 20,
         bounciness: 4,
-              }).start();
-      };
+      }).start();
+    };
 
-      const handlePressOut = () => {
+    const handlePressOut = () => {
       Animated.spring(scaleAnim, {
         toValue: 1,
         useNativeDriver: true,
@@ -704,7 +692,7 @@ export default function ChatList() {
       }).start();
     };
 
-    const hasUnread = item.unreadcount >= 1;
+    const hasUnread = (unreadCounts[item.recipientId] || 0) >= 1;
 
     return (
       <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
@@ -728,27 +716,26 @@ export default function ChatList() {
             alignItems: 'center',
           }}
         >
-          {/* Profile Avatar with online indicator */}
           <View style={{ position: 'relative', marginRight: scaleSize(16) }}>
-                         <View style={{
-               width: scaleSize(56),
-               height: scaleSize(56),
-               borderRadius: scaleSize(28),
-               backgroundColor: COLORS.secondaryBackground,
-               justifyContent: 'center',
-               alignItems: 'center',
-               borderWidth: hasUnread ? 2 : 2,
-               borderColor: hasUnread ? COLORS.primary : COLORS.accent,
-             }}>
-               <Text style={{
-                 color: COLORS.textPrimary,
-                 fontSize: scaleSize(20),
-                 fontFamily: Fonts.GeneralSans.Bold,
-                 letterSpacing: -0.3,
-               }}>
-                 {item.recipient?.profile_initials || item.recipient?.full_name?.charAt(0) || item.recipient?.fullName?.charAt(0) || 'U'}
-               </Text>
-             </View>
+            <View style={{
+              width: scaleSize(56),
+              height: scaleSize(56),
+              borderRadius: scaleSize(28),
+              backgroundColor: COLORS.secondaryBackground,
+              justifyContent: 'center',
+              alignItems: 'center',
+              borderWidth: hasUnread ? 2 : 2,
+              borderColor: hasUnread ? COLORS.primary : COLORS.accent,
+            }}>
+              <Text style={{
+                color: COLORS.textPrimary,
+                fontSize: scaleSize(20),
+                fontFamily: Fonts.GeneralSans.Bold,
+                letterSpacing: -0.3,
+              }}>
+                {item.recipient?.profile_initials || item.recipient?.full_name?.charAt(0) || item.recipient?.fullName?.charAt(0) || 'U'}
+              </Text>
+            </View>
             {item.recipient?.online && (
               <View style={{
                 position: 'absolute',
@@ -764,9 +751,7 @@ export default function ChatList() {
             )}
           </View>
 
-          {/* Chat Content */}
           <View style={{ flex: 1 }}>
-            {/* Top Row: Name and Time */}
             <View style={{
               flexDirection: 'row',
               justifyContent: 'space-between',
@@ -794,13 +779,11 @@ export default function ChatList() {
               </AppText>
             </View>
             
-            {/* Bottom Row: Message Preview and Unread Count */}
             <View style={{
               flexDirection: 'row',
               justifyContent: 'space-between',
               alignItems: 'center',
             }}>
-              {/* Message Preview */}
               <AppText 
                 style={{
                   color: hasUnread ? COLORS.textPrimary : COLORS.textSecondary,
@@ -815,14 +798,11 @@ export default function ChatList() {
                 {handleDecrypt(item.lastMessage) || 'No messages yet'}
               </AppText>
               
-              {/* Unread Count Badge and Status Icons */}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: scaleSize(8) }}>
-                {/* Double tick for seen messages */}
                 {!hasUnread && item.lastMessage && (
                   <Ionicons name="checkmark-done" size={scaleSize(16)} color={COLORS.primary} />
                 )}
                 
-                {/* Unread Count Badge */}
                 {hasUnread && (
                   <View style={{
                     backgroundColor: COLORS.primary,
@@ -838,7 +818,7 @@ export default function ChatList() {
                       fontSize: scaleSize(12),
                       fontFamily: Fonts.GeneralSans.Semibold,
                     }}>
-                      {item.unreadcount > 99 ? '99+' : item.unreadcount}
+                      {(unreadCounts[item.recipientId] || 0) > 99 ? '99+' : unreadCounts[item.recipientId] || 0}
                     </AppText>
                   </View>
                 )}
@@ -850,7 +830,6 @@ export default function ChatList() {
     );
   };
 
-  // Modern Delete Modal
   const DeleteModal = () => (
     <Modal
       visible={showDeleteModal}
@@ -937,6 +916,7 @@ export default function ChatList() {
             .select('*')
             .eq('id', supaUser.id)
             .single();
+            console.log("data",data);
           if (data && isActive) {
             setUser(data);
           }
@@ -950,7 +930,7 @@ export default function ChatList() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }}>
       <StatusBar barStyle="light-content" />
-      {showLoading ? (
+      {(!user || !user.id || loading) ? (
         <View style={{ 
           flex: 1, 
           backgroundColor: COLORS.background, 
@@ -958,243 +938,262 @@ export default function ChatList() {
           alignItems: 'center' 
         }}>
           <View style={{ alignItems: 'center', marginBottom: 24 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center' }}>
-              <Text style={{ fontSize: scaleSize(32), color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Medium, marginRight: 2, letterSpacing: -1 }}>social</Text>
-              <Text style={{ fontSize: scaleSize(44), color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Bold, letterSpacing: -2 }}>z.</Text>
-            </View>
+            <Text style={{ fontSize: scaleSize(32), color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Medium, marginRight: 2, letterSpacing: -1 }}>Socialz.</Text>
             <Text style={{ color: '#A1A1AA', fontSize: scaleSize(18), marginTop: 8, fontFamily: Fonts.GeneralSans.Medium }}>Loading...</Text>
           </View>
         </View>
       ) : (
         <>
-      {/* Main content over glassmorphism background */}
-      <Header />
-      <SearchBar />
-      <FlatList
-        data={chats}
-        keyExtractor={item => item.id}
-        renderItem={({ item }) => <ChatItem item={item} />}
-        contentContainerStyle={{
-          paddingTop: verticalScale(8),
-          paddingBottom: verticalScale(100),
-        }}
-        refreshing={loading}
-        onRefresh={loadChats}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={{
-            flex: 1,
-            justifyContent: 'center',
-            alignItems: 'center',
-            padding: scaleSize(40),
-            marginTop: verticalScale(80),
-            backgroundColor: 'rgba(0,0,0,0.7)',
-            borderRadius: scaleSize(24),
-            overflow: 'hidden',
-          }}>
-            <Ionicons name="chatbubbles-outline" size={scaleSize(64)} color={COLORS.textTertiary} />
-            <AppText style={{
-              color: COLORS.textSecondary,
-              textAlign: 'center',
-              fontSize: scaleSize(18),
-              fontFamily: Fonts.GeneralSans.Medium,
-              letterSpacing: 0.3,
-              lineHeight: scaleSize(24),
-              marginTop: verticalScale(16),
-            }}>
-              No conversations yet
-            </AppText>
-            <AppText style={{
-              color: COLORS.textTertiary,
-              textAlign: 'center',
-              fontSize: scaleSize(16),
-              letterSpacing: 0.2,
-              lineHeight: scaleSize(20),
-              marginTop: verticalScale(8),
-            }}>
-              Start chatting with your friends!
-            </AppText>
-          </View>
-        }
-      />
-
-      {/* New Chat Modal */}
-      <Modal
-        visible={showNewChatModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowNewChatModal(false)}
-      >
-        <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-          <View style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            paddingTop: verticalScale(60),
-            paddingHorizontal: scaleSize(20),
-            paddingBottom: verticalScale(20),
-            borderBottomWidth: 1,
-            borderBottomColor: COLORS.separator,
-            backgroundColor: COLORS.background,
-          }}>
-            <TouchableOpacity 
-              onPress={() => setShowNewChatModal(false)}
-              style={{ 
-                marginRight: scaleSize(16),
-                width: scaleSize(44),
-                height: scaleSize(44),
-                borderRadius: scaleSize(22),
-                backgroundColor: COLORS.searchBackground,
+          <Header />
+          {/* <SearchBar /> */}
+          <FlatList
+            data={chats}
+            keyExtractor={item => item.id}
+            renderItem={({ item }) => <ChatItem item={item} />}
+            contentContainerStyle={{
+              paddingTop: verticalScale(8),
+              paddingBottom: verticalScale(100),
+            }}
+            refreshing={loading}
+            onRefresh={loadChats}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={
+              <View style={{
+                flex: 1,
                 justifyContent: 'center',
                 alignItems: 'center',
-              }}
-            >
-              <Ionicons name="arrow-back" size={scaleSize(24)} color={COLORS.textPrimary} />
-            </TouchableOpacity>
-            
-            <AppText style={{
-              fontSize: scaleSize(20),
-              fontFamily: Fonts.GeneralSans.Semibold,
-              color: COLORS.textPrimary,
-              letterSpacing: 0.3,
-              flex: 1,
-            }}>
-              New Chat
-            </AppText>
-          </View>
-
-          <View style={{ paddingHorizontal: scaleSize(20), paddingVertical: verticalScale(16) }}>
-            <View style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              backgroundColor: COLORS.searchBackground,
-              borderRadius: scaleSize(16),
-              paddingHorizontal: scaleSize(16),
-              paddingVertical: verticalScale(12),
-              borderWidth: 1,
-              borderColor: COLORS.border,
-            }}>
-              <Ionicons name="search" size={scaleSize(20)} color={COLORS.textSecondary} />
-              <TextInput
-                style={{
-                  flex: 1,
-                  marginLeft: scaleSize(12),
+                padding: scaleSize(40),
+                marginTop: verticalScale(80),
+                backgroundColor: 'rgba(0,0,0,0.7)',
+                borderRadius: scaleSize(24),
+                overflow: 'hidden',
+              }}>
+                <Ionicons name="chatbubbles-outline" size={scaleSize(64)} color={COLORS.textTertiary} />
+                <AppText style={{
+                  color: COLORS.textSecondary,
+                  textAlign: 'center',
+                  fontSize: scaleSize(18),
+                  fontFamily: Fonts.GeneralSans.Medium,
+                  letterSpacing: 0.3,
+                  lineHeight: scaleSize(24),
+                  marginTop: verticalScale(16),
+                }}>
+                  No conversations yet
+                </AppText>
+                <AppText style={{
+                  color: COLORS.textTertiary,
+                  textAlign: 'center',
                   fontSize: scaleSize(16),
-                  color: COLORS.textPrimary,
-                  paddingVertical: verticalScale(4)
-                }}
-                placeholder="Search users..."
-                placeholderTextColor={COLORS.textSecondary}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                autoFocus={true}
-              />
-              {searchQuery ? (
-                <TouchableOpacity onPress={() => setSearchQuery('')}>
-                  <Ionicons name="close-circle" size={scaleSize(20)} color={COLORS.textSecondary} />
-                </TouchableOpacity>
-              ) : null}
-            </View>
-          </View>
-          
-          {searching ? (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-              <ActivityIndicator size="large" color={COLORS.primary} />
-            </View>
-          ) : (
-            <FlatList
-              data={searchResults}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  onPress={() => {
-                    handleSearchNavigation(item.id);
-                    setShowNewChatModal(false);
-                  }}
-                  style={{
-                    flexDirection: 'row',
-                    padding: scaleSize(20),
+                  letterSpacing: 0.2,
+                  lineHeight: scaleSize(20),
+                  marginTop: verticalScale(8),
+                }}>
+                  Start chatting with your friends!
+                </AppText>
+              </View>
+            }
+          />
+
+          {/* Floating Action Button for New Chat */}
+          {/* <TouchableOpacity
+            onPress={() => setShowNewChatModal(true)}
+            style={{
+              position: 'absolute',
+              right: 24,
+              bottom: 80,
+              width: 60,
+              height: 60,
+              borderRadius: 30,
+              backgroundColor: COLORS.primary,
+              justifyContent: 'center',
+              alignItems: 'center',
+              shadowColor: COLORS.primary,
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              elevation: 8,
+              zIndex: 100,
+            }}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="create-outline" size={32} color="#fff" />
+          </TouchableOpacity> */}
+
+          <Modal
+            visible={showNewChatModal}
+            transparent
+            animationType="slide"
+            onRequestClose={() => setShowNewChatModal(false)}
+          >
+            <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingTop: verticalScale(60),
+                paddingHorizontal: scaleSize(20),
+                paddingBottom: verticalScale(20),
+                borderBottomWidth: 1,
+                borderBottomColor: COLORS.separator,
+                backgroundColor: COLORS.background,
+              }}>
+                <TouchableOpacity 
+                  onPress={() => setShowNewChatModal(false)}
+                  style={{ 
+                    marginRight: scaleSize(16),
+                    width: scaleSize(44),
+                    height: scaleSize(44),
+                    borderRadius: scaleSize(22),
+                    backgroundColor: COLORS.searchBackground,
+                    justifyContent: 'center',
                     alignItems: 'center',
-                    borderBottomWidth: 1,
-                    borderBottomColor: COLORS.separator,
-                    backgroundColor: COLORS.background,
-                    marginHorizontal: scaleSize(4),
-                    marginVertical: verticalScale(2),
-                    borderRadius: scaleSize(12),
-                    minHeight: verticalScale(80),
                   }}
                 >
-                  <Image
-                    source={
-                      item.profileImage 
-                        ? { uri: item.profileImage === "https://via.placeholder.com/150" ? DEFAULT_PROFILE : item.profileImage } 
-                        : { uri: DEFAULT_PROFILE }
-                    }
-                    style={{
-                      width: scaleSize(56),
-                      height: scaleSize(56),
-                      borderRadius: scaleSize(28),
-                      backgroundColor: COLORS.searchBackground,
-                      borderWidth: 1,
-                      borderColor: COLORS.border,
-                      marginRight: scaleSize(16),
-                    }}
-                  />
-                  <View style={{ flex: 1 }}>
-                    <AppText style={{
-                      fontSize: scaleSize(17),
-                      fontFamily: Fonts.GeneralSans.Semibold,
-                      color: COLORS.textPrimary,
-                      letterSpacing: 0.3,
-                      marginBottom: verticalScale(4),
-                    }}>
-                      {item.fullName || 'Unknown User'}
-                    </AppText>
-                    {/* Display college name */}
-                    {item.college && (
-                      <AppText style={{
-                        fontSize: scaleSize(15),
-                        color: COLORS.textSecondary,
-                        letterSpacing: 0.2,
-                      }}>
-                        @{item.college.name || 'No college information'}
-                      </AppText>
-                    )}
-                  </View>
+                  <Ionicons name="arrow-back" size={scaleSize(24)} color={COLORS.textPrimary} />
                 </TouchableOpacity>
-              )}
-              ListEmptyComponent={
-                searchQuery.length > 0 ? (
-                  <View style={{ padding: scaleSize(40), alignItems: 'center' }}>
-                    <Ionicons name="search-outline" size={scaleSize(48)} color={COLORS.textTertiary} />
-                    <AppText style={{ 
-                      color: COLORS.textSecondary, 
-                      fontSize: scaleSize(16), 
-                      marginTop: verticalScale(16),
-                      fontFamily: Fonts.GeneralSans.Medium 
-                    }}>
-                      No users found
-                    </AppText>
-                  </View>
-                ) : (
-                  <View style={{ padding: scaleSize(40), alignItems: 'center' }}>
-                    <Ionicons name="people-outline" size={scaleSize(48)} color={COLORS.textTertiary} />
-                    <AppText style={{ 
-                      color: COLORS.textSecondary, 
-                      fontSize: scaleSize(16), 
-                      marginTop: verticalScale(16),
-                      fontFamily: Fonts.GeneralSans.Medium 
-                    }}>
-                      Search for users to chat with
-                    </AppText>
-                  </View>
-                )
-              }
-            />
-          )}
-        </View>
-      </Modal>
+                
+                <AppText style={{
+                  fontSize: scaleSize(20),
+                  fontFamily: Fonts.GeneralSans.Semibold,
+                  color: COLORS.textPrimary,
+                  letterSpacing: 0.3,
+                  flex: 1,
+                }}>
+                  New Chat
+                </AppText>
+              </View>
 
-      <DeleteModal />
+              <View style={{ paddingHorizontal: scaleSize(20), paddingVertical: verticalScale(16) }}>
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: COLORS.searchBackground,
+                  borderRadius: scaleSize(16),
+                  paddingHorizontal: scaleSize(16),
+                  paddingVertical: verticalScale(12),
+                  borderWidth: 1,
+                  borderColor: COLORS.border,
+                }}>
+                  <Ionicons name="search" size={scaleSize(20)} color={COLORS.textSecondary} />
+                  <TextInput
+                    style={{
+                      flex: 1,
+                      marginLeft: scaleSize(12),
+                      fontSize: scaleSize(16),
+                      color: COLORS.textPrimary,
+                      paddingVertical: verticalScale(4)
+                    }}
+                    placeholder="Search users..."
+                    placeholderTextColor={COLORS.textSecondary}
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    autoFocus={true}
+                  />
+                  {searchQuery ? (
+                    <TouchableOpacity onPress={() => setSearchQuery('')}>
+                      <Ionicons name="close-circle" size={scaleSize(20)} color={COLORS.textSecondary} />
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              </View>
+              
+              {searching ? (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                  <ActivityIndicator size="large" color={COLORS.primary} />
+                </View>
+              ) : (
+                <FlatList
+                  data={searchResults}
+                  keyExtractor={(item) => item.id}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      onPress={() => {
+                        handleSearchNavigation(item.id);
+                        setShowNewChatModal(false);
+                      }}
+                      style={{
+                        flexDirection: 'row',
+                        padding: scaleSize(20),
+                        alignItems: 'center',
+                        borderBottomWidth: 1,
+                        borderBottomColor: COLORS.separator,
+                        backgroundColor: COLORS.background,
+                        marginHorizontal: scaleSize(4),
+                        marginVertical: verticalScale(2),
+                        borderRadius: scaleSize(12),
+                        minHeight: verticalScale(80),
+                      }}
+                    >
+                      <Image
+                        source={
+                          item.profileImage 
+                            ? { uri: item.profileImage === "https://via.placeholder.com/150" ? DEFAULT_PROFILE : item.profileImage } 
+                            : { uri: DEFAULT_PROFILE }
+                        }
+                        style={{
+                          width: scaleSize(56),
+                          height: scaleSize(56),
+                          borderRadius: scaleSize(28),
+                          backgroundColor: COLORS.searchBackground,
+                          borderWidth: 1,
+                          borderColor: COLORS.border,
+                          marginRight: scaleSize(16),
+                        }}
+                      />
+                      <View style={{ flex: 1 }}>
+                        <AppText style={{
+                          fontSize: scaleSize(17),
+                          fontFamily: Fonts.GeneralSans.Semibold,
+                          color: COLORS.textPrimary,
+                          letterSpacing: 0.3,
+                          marginBottom: verticalScale(4),
+                        }}>
+                          {item.fullName || 'Unknown User'}
+                        </AppText>
+                        {item.college && (
+                          <AppText style={{
+                            fontSize: scaleSize(15),
+                            color: COLORS.textSecondary,
+                            letterSpacing: 0.2,
+                          }}>
+                            @{item.college || 'No college information'}
+                          </AppText>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  )}
+                  ListEmptyComponent={
+                    searchQuery.length > 0 ? (
+                      <View style={{ padding: scaleSize(40), alignItems: 'center' }}>
+                        <Ionicons name="search-outline" size={scaleSize(48)} color={COLORS.textTertiary} />
+                        <AppText style={{ 
+                          color: COLORS.textSecondary, 
+                          fontSize: scaleSize(16), 
+                          marginTop: verticalScale(16),
+                          fontFamily: Fonts.GeneralSans.Medium 
+                        }}>
+                          No users found
+                        </AppText>
+                      </View>
+                    ) : (
+                      <View style={{ padding: scaleSize(40), alignItems: 'center' }}>
+                        <Ionicons name="people-outline" size={scaleSize(48)} color={COLORS.textTertiary} />
+                        <AppText style={{ 
+                          color: COLORS.textSecondary, 
+                          fontSize: scaleSize(16), 
+                          marginTop: verticalScale(16),
+                          fontFamily: Fonts.GeneralSans.Medium 
+                        }}>
+                          Search for users to chat with
+                        </AppText>
+                      </View>
+                    )
+                  }
+                />
+              )}
+            </View>
+          </Modal>
+
+          <DeleteModal />
         </>
       )}
     </SafeAreaView>

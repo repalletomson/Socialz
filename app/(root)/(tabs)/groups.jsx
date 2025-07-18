@@ -21,6 +21,8 @@ import { Fonts, TextStyles } from '../../../constants/Fonts';
 import { scaleSize, verticalScale } from '../../../utiles/common';
 import { useFocusEffect } from '@react-navigation/native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
+import { joinGroup } from '../../../lib/firebase';
+import CustomAlert from '../../../components/CustomAlert';
 
 const { width } = Dimensions.get('window');
 const SPACING = 10;
@@ -40,10 +42,10 @@ const COLORS = {
 const DEFAULT_GROUPS = [
   { id: 'projects', name: 'Higher studies', image: require('../../../assets/images/placements.jpeg') },
   { id: 'movies', name: 'Movies', image: require('../../../assets/images/CINEMA.jpeg') },
-  { id: 'funny', name: 'Fest&Events', image: require('../../../assets/images/Events.jpeg') },
-  { id: 'placements', name: 'Placement', image: require('../../../assets/images/Placementss.jpeg') },
+  { id: 'Fest&Events', name: 'Fest&Events', image: require('../../../assets/images/Events.jpeg') },
+  { id: 'placements', name: 'Placements', image: require('../../../assets/images/Placementss.jpeg') },
   { id: 'gaming', name: 'Gaming', image: require('../../../assets/images/Gaming.jpeg') },
-  { id: 'coding', name: 'Coding', image: require('../../../assets/images/algoritm.jpeg') },
+  { id: 'coding', name: 'Coding', image: require('../../../assets/images/alogrithm.jpeg') },
 ];
 
 export default function GroupList() {
@@ -56,6 +58,15 @@ export default function GroupList() {
   const [selectedGroup, setSelectedGroup] = useState(null);
   const navigation = useNavigation();
   const isMounted = useRef(true);
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+
+  const showCustomAlert = (title, message) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertVisible(true);
+  };
 
   const fetchUserGroups = useCallback(async (user) => {
     if (!user?.id) {
@@ -158,22 +169,22 @@ export default function GroupList() {
 
   const handleGroupPress = (group) => {
     if (!currentUser) {
-      Alert.alert('Error', 'Please log in to join or access groups.');
+      showCustomAlert('Error', 'Please log in to join or access groups.');
       return;
     }
     
     if (isUserInGroup(group.id)) {
       // User is already a member - go directly to groupRoom
-      router.push({
-        pathname: '/(root)/groupRoom',
-        params: {
-          groupId: group.id,
-          groupName: group.name,
-          groupImage: JSON.stringify(group.image),
-          userGroups: JSON.stringify(userGroups),
-          userId: currentUser.id,
-        },
-      });
+              router.push({
+          pathname: '/(root)/groupRoom',
+          params: {
+            groupId: group.id,
+            groupName: group.name,
+            groupImage: group.image,
+            userGroups: JSON.stringify(userGroups),
+            userId: currentUser.id,
+          },
+        });
     } else {
       // User is not a member - show join modal
       setSelectedGroup(group);
@@ -199,14 +210,13 @@ export default function GroupList() {
 
   const handleJoinGroup = async () => {
     if (!currentUser?.id || !selectedGroup) {
-      Alert.alert('Error', 'Unable to join group. Please try again.');
+      showCustomAlert('Error', 'Unable to join group. Please try again.');
       return;
     }
     setJoiningGroup(true);
     try {
       const updatedGroups = await updateUserGroupsInSupabase(selectedGroup.id, 'join');
       try {
-        const { joinGroup } = await import('../../../lib/firebase');
         await joinGroup(currentUser.id, selectedGroup.id);
       } catch (firebaseError) {
         console.warn('Firebase group update failed:', firebaseError);
@@ -214,6 +224,11 @@ export default function GroupList() {
       if (isMounted.current) {
         setUserGroups(updatedGroups);
         setCurrentUser({ ...currentUser, groups: updatedGroups });
+        
+        // Update auth store
+        const { updateUserDetails } = useAuthStore.getState();
+        updateUserDetails({ groups: updatedGroups });
+        
         setJoinModalVisible(false);
         setSelectedGroup(null);
         router.push({
@@ -221,7 +236,7 @@ export default function GroupList() {
           params: {
             groupId: selectedGroup.id,
             groupName: selectedGroup.name,
-            groupImage: JSON.stringify(selectedGroup.image),
+            groupImage: selectedGroup.image,
             userGroups: JSON.stringify(updatedGroups),
             userId: currentUser.id,
           },
@@ -229,7 +244,7 @@ export default function GroupList() {
       }
     } catch (error) {
       networkErrorHandler.showErrorToUser(error);
-      Alert.alert('Error', 'Failed to join group. Please try again.');
+      showCustomAlert('Error', 'Failed to join group. Please try again.');
     } finally {
       setJoiningGroup(false);
     }
@@ -459,29 +474,17 @@ export default function GroupList() {
         }}
       >
         <View style={{ alignItems: 'center', marginBottom: 24 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center' }}>
-            <Text
-              style={{
-                fontSize: scaleSize(32),
-                color: '#FFFFFF',
-                fontFamily: Fonts.GeneralSans.Medium,
-                marginRight: 2,
-                letterSpacing: -1,
-              }}
-            >
-              social
-            </Text>
-            <Text
-              style={{
-                fontSize: scaleSize(44),
-                color: '#FFFFFF',
-                fontFamily: Fonts.GeneralSans.Bold,
-                letterSpacing: -2,
-              }}
-            >
-              z.
-            </Text>
-          </View>
+          <Text
+            style={{
+              fontSize: scaleSize(32),
+              color: '#FFFFFF',
+              fontFamily: Fonts.GeneralSans.Medium,
+              marginRight: 2,
+              letterSpacing: -1,
+            }}
+          >
+            Socialz.
+          </Text>
           <Text
             style={{
               color: '#A1A1AA',
@@ -529,6 +532,12 @@ export default function GroupList() {
         <CustomGrid />
       </ScrollView>
       <JoinGroupModal />
+      <CustomAlert
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        onClose={() => setAlertVisible(false)}
+      />
       {/* Removed LeaveGroupModal - leave functionality moved to groupRoom */}
     </SafeAreaView>
   );

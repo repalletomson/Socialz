@@ -158,7 +158,7 @@ export default function Layout() {
         options={{
           headerShown: false,
           tabBarIcon: ({ focused }) => <TabIcon name="groups" focused={focused} />,
-          tabBarLabel: 'Groups',
+          tabBarLabel: 'Spaces',
         }}
       />
     </Tabs>

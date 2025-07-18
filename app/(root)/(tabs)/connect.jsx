@@ -13,6 +13,7 @@ import {
   useColorScheme,
   StatusBar,
   Dimensions,
+  Share,
 } from "react-native";
 import { supabase } from "../../../config/supabaseConfig";
 import { MaterialIcons, Ionicons, Feather } from "@expo/vector-icons";
@@ -229,7 +230,7 @@ export default function Connect()  {
         .neq('id', currentUser.id)
         // .limit(50);
         // console.log(usersData);
-
+      console.log(usersData);
 
       if (error) {
         console.error('❌ Error fetching users:', error);
@@ -565,6 +566,7 @@ const ProfileModal = ({ user, visible, onClose }) => (
             marginBottom: scaleSize(20),
             marginTop: scaleSize(10),
             borderRadius: 12,
+            fontFamily: Fonts.GeneralSans.Regular,
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "center",
@@ -579,7 +581,7 @@ const ProfileModal = ({ user, visible, onClose }) => (
           <Text style={{ 
             color: theme.background, 
             fontSize: scaleSize(16), 
-            fontFamily: Fonts.GeneralSans.Semibold,
+            fontFamily: Fonts.GeneralSans.Medium,
             letterSpacing: 0.3,
           }}>
             Message
@@ -701,10 +703,7 @@ const ProfileModal = ({ user, visible, onClose }) => (
     return (
       <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
         <View style={{ alignItems: 'center', marginBottom: 24 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center' }}>
-            <Text style={{ fontSize: scaleSize(32), color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Medium, marginRight: 2, letterSpacing: -1 }}>social</Text>
-            <Text style={{ fontSize: scaleSize(44), color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Bold, letterSpacing: -2 }}>z.</Text>
-          </View>
+          <Text style={{ fontSize: scaleSize(32), color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Medium, marginRight: 2, letterSpacing: -1 }}>Socialz.</Text>
           <Text style={{ color: '#A1A1AA', fontSize: scaleSize(18), marginTop: 8, fontFamily: Fonts.GeneralSans.Medium }}>Loading...</Text>
         </View>
       </View>
@@ -787,7 +786,7 @@ const ProfileModal = ({ user, visible, onClose }) => (
           </Text>
           {/* College Name - Single line */}
           {user.college && (
-            <Text style={{ fontSize: scaleSize(13), color: theme.textSecondary, marginBottom: 16, textAlign: 'center', width: '100%' }} numberOfLines={1} ellipsizeMode="tail">
+            <Text style={{ fontSize: scaleSize(13), color: theme.textSecondary, marginBottom: 16, textAlign: 'center', width: '100%' ,fontFamily: Fonts.GeneralSans.Regular}} numberOfLines={1} ellipsizeMode="tail">
               {typeof user.college === 'object' ? user.college.name : user.college}
             </Text>
           )}
@@ -826,7 +825,7 @@ const ProfileModal = ({ user, visible, onClose }) => (
             <Text style={{ 
               color: "white", 
               fontSize: scaleSize(14), 
-              fontFamily: Fonts.GeneralSans.Semibold,
+              fontFamily: Fonts.GeneralSans.Regular,
               letterSpacing: 0.3,
             }}>
               Message
@@ -876,7 +875,7 @@ const ProfileModal = ({ user, visible, onClose }) => (
         <Text style={{
           color: theme.text,
           fontSize: scaleSize(20),
-          fontFamily: Fonts.GeneralSans.Bold,
+          fontFamily: Fonts.GeneralSans.Regular,
           letterSpacing: -0.3,
         }}>
           {user.profile_initials || user.full_name?.charAt(0) || user.fullName?.charAt(0) || 'U'}
@@ -889,7 +888,7 @@ const ProfileModal = ({ user, visible, onClose }) => (
           {user.fullName}
         </Text>
         {user.college && (
-          <Text style={{ fontSize: scaleSize(13), color: theme.textSecondary, marginBottom: 2 }}>
+          <Text style={{ fontSize: scaleSize(13), color: theme.textSecondary, marginBottom: 2 ,fontFamily: Fonts.GeneralSans.Regular}}>
             {typeof user.college === 'object' ? user.college.name : user.college}
           </Text>
         )}
@@ -921,7 +920,7 @@ const ProfileModal = ({ user, visible, onClose }) => (
             justifyContent: "center",
           }}
         >
-          <Text style={{ color: "white", fontSize: scaleSize(14), fontFamily: Fonts.GeneralSans.Semibold }}>Message</Text>
+          <Text style={{ color: "white", fontSize: scaleSize(14), fontFamily: Fonts.GeneralSans.Regular }}>Message</Text>
         </TouchableOpacity>
       </LinearGradient>
     </TouchableOpacity>
@@ -1031,7 +1030,7 @@ const ProfileModal = ({ user, visible, onClose }) => (
         }}
       >  
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-          <Text style={TextStyles.h3}>
+          <Text style={{ fontSize: 24, color: theme.text, fontFamily: Fonts.GeneralSans.Bold }}>
             Connect with People
           </Text>
           <View style={{ flexDirection: "row", gap: 12 }}>
@@ -1105,7 +1104,7 @@ const ProfileModal = ({ user, visible, onClose }) => (
         >
           <Ionicons name="search" size={20} color={theme.textSecondary} />
           <TextInput
-            style={{ flex: 1, color: theme.text, marginLeft: 12, fontSize: 16 }}
+            style={{ flex: 1, color: theme.text, marginLeft: 12, fontSize: 16,fontFamily: Fonts.GeneralSans.Medium }}
             placeholder="Search by name..."
             placeholderTextColor={theme.textSecondary}
             value={searchQuery}
@@ -1161,15 +1160,28 @@ const ProfileModal = ({ user, visible, onClose }) => (
               color: theme.textSecondary,
               textAlign: 'center',
               lineHeight: 24,
+              fontFamily: Fonts.GeneralSans.Regular,
               marginBottom: 20,
             }}>
               Please share with your friends and engage with them to build your network!
             </Text>
             
-            <TouchableOpacity
-              onPress={() => {
-                // You can add share functionality here
-                Alert.alert('Share App', 'Share this amazing app with your friends!');
+            {/* <TouchableOpacity
+              onPress={async () => {
+                try {
+                  const appName = "SocialZ";
+                  const appDescription = "Your ultimate student networking platform!";
+                  const playStoreLink = "https://play.google.com/store/apps/details?id=com.student.app";
+                 
+                  const shareMessage = `${appDescription}\n\n📱 Download ${appName}:\nAndroid: ${playStoreLink}\niOS: ${appStoreLink}\n\n#SocialZ #StudentNetworking #CollegeLife`;
+                  await Share.share({
+                    title: `Join me on ${appName}!`,
+                    message: shareMessage,
+                    url: playStoreLink,
+                  });
+                } catch (error) {
+                  Alert.alert('Error', 'Failed to share the app.');
+                }
               }}
               style={{
                 backgroundColor: theme.primary,
@@ -1189,7 +1201,7 @@ const ProfileModal = ({ user, visible, onClose }) => (
               }}>
                 Share App
               </Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
         ) : (
           <>

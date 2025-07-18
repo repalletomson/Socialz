@@ -10,7 +10,7 @@ Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
-    shouldSetBadge: true,
+    shouldSetBadge: false, // Changed to false to prevent automatic badge increment
   }),
 });
 
@@ -21,7 +21,11 @@ export function usePushNotifications() {
   const notificationListener = useRef();
   const responseListener = useRef();
 
+  // Main initialization effect - always runs
   useEffect(() => {
+    // Clear badge count on app launch
+    Notifications.setBadgeCountAsync(0);
+    
     registerForPushNotificationsAsync()
       .then(token => {
         setExpoPushToken(token ?? '');
@@ -43,6 +47,7 @@ export function usePushNotifications() {
     notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
       console.log('🔔 Notification received:', notification);
       setNotification(notification);
+      // Always keep badge count at 0
       Notifications.setBadgeCountAsync(0);
       // Handle notification based on type
       handleNotificationReceived(notification);
@@ -51,6 +56,7 @@ export function usePushNotifications() {
     // Listen for notification taps
     responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
       console.log('📱 Notification tapped:', response);
+      // Always keep badge count at 0
       Notifications.setBadgeCountAsync(0);
       // Handle notification tap
       handleNotificationTapped(response);
@@ -62,6 +68,16 @@ export function usePushNotifications() {
       responseListener.current &&
         Notifications.removeNotificationSubscription(responseListener.current);
     };
+  }, []);
+
+  // Additional badge clearing effect - always runs
+  useEffect(() => {
+    const subscription = Notifications.addNotificationReceivedListener(() => {
+      // Always clear badge when any notification is received
+      Notifications.setBadgeCountAsync(0);
+    });
+
+    return () => subscription.remove();
   }, []);
 
   // Save Expo push token to Supabase
@@ -140,8 +156,8 @@ export function usePushNotifications() {
         console.log('📩 General notification received');
     }
 
-    // Increment badge count
-    Notifications.setBadgeCountAsync(1);
+    // Always keep badge count at 0 (removed the increment)
+    Notifications.setBadgeCountAsync(0);
   };
 
   // Handle notification tap (when user taps on notification)
@@ -172,7 +188,7 @@ export function usePushNotifications() {
       }
     }
 
-    // Clear badge when notification is tapped
+    // Always keep badge count at 0
     Notifications.setBadgeCountAsync(0);
   };
 
@@ -244,7 +260,7 @@ export function usePushNotifications() {
     return status === 'granted';
   };
 
-  // Clear all notifications
+  // Clear all notifications and badge
   const clearAllNotifications = async () => {
     await Notifications.dismissAllNotificationsAsync();
     await Notifications.setBadgeCountAsync(0);
@@ -262,6 +278,16 @@ export function usePushNotifications() {
     });
   };
 
+  // Force clear badge count (call this manually if needed)
+  const forceClearBadge = async () => {
+    try {
+      await Notifications.setBadgeCountAsync(0);
+      console.log('✅ Badge count cleared');
+    } catch (error) {
+      console.error('Error clearing badge:', error);
+    }
+  };
+
   return {
     expoPushToken,
     channels,
@@ -274,9 +300,10 @@ export function usePushNotifications() {
     checkNotificationPermissions,
     clearAllNotifications,
     sendTestNotification,
+    forceClearBadge, // New function to manually clear badge
     
     // Handlers (you can override these in your components)
     handleNotificationReceived,
     handleNotificationTapped,
   };
-} 
+}

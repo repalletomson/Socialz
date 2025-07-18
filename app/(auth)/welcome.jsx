@@ -20,7 +20,7 @@ const onboardingData = [
     id: 1,
     title: 'Welcome to',
     subtitle: 'SocialZ.',
-    description: 'An Exclusive app made for Gen Z\'s',
+    description: 'An Exclusive app made for GenZ college students',
     backgroundType: 'gradient1',
     accentColor: '#A259FF',
   }, 
@@ -150,7 +150,7 @@ export default function WelcomeScreen() {
               <View style={styles.brandContainer}>
                 <Text style={styles.brandName}>Social</Text>
                 <View style={styles.dotContainer}>
-                  <Text style={styles.brandNameDot}>Z.</Text>
+                  <Text style={styles.brandNameDot}>z.</Text>
                 </View>
               </View>
               <Text style={styles.welcomeDescription}>

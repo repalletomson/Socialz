@@ -6,9 +6,18 @@ export const useGroupMessages = (chatId) => {
     const [messages, setMessages] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const messagesRef = collection(db, 'chats', chatId, 'messages');
   
     useEffect(() => {
+      // Always set loading to false if no chatId
+      if (!chatId) {
+        setMessages([]);
+        setLoading(false);
+        setError(null);
+        return;
+      }
+
+      const messagesRef = collection(db, 'chats', chatId, 'messages');
+      
       const unsubscribe = onSnapshot(
         query(messagesRef, orderBy('timestamp', 'desc')),
         async (snapshot) => {

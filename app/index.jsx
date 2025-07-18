@@ -217,44 +217,11 @@ import { View, StyleSheet, Animated, Text } from 'react-native';
 import { Redirect } from 'expo-router';
 import { useAuthStore } from '../stores/useAuthStore';
 
-const Loader = () => {
-  const loadingAnimation = new Animated.Value(0);
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(loadingAnimation, {
-          toValue: 1,
-          duration: 1500,
-          useNativeDriver: false,
-        }),
-        Animated.timing(loadingAnimation, {
-          toValue: 0,
-          duration: 0,
-          useNativeDriver: false,
-        }),
-      ])
-    ).start();
-  }, []);
-
-  return (
-    <View style={styles.wrapper}>
-      <Animated.Text
-        style={[
-          styles.text,
-          {
-            opacity: loadingAnimation.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0.3, 1],
-            }),
-          },
-        ]}
-      >
-        Loading...
-      </Animated.Text>
-    </View>
-  );
-};
+const Loader = () => (
+  <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }}>
+    <Text style={{ color: '#fff', fontSize: 32, fontFamily: 'GeneralSans-Bold' }}>Socialz.</Text>
+  </View>
+);
 
 export default function IndexPage() {
   const { 

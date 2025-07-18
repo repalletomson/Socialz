@@ -956,7 +956,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useSafeNavigation } from '../../hooks/useSafeNavigation';
-import { getUserStreak, subscribeToStreakChanges, getStreakLeaderboard, getTodayProgress, resetUserStreak } from '../../(apis)/streaks';
+import { getUserStreak, subscribeToStreakChanges, getStreakLeaderboard, getTodayProgress, resetAllInactiveStreaks } from '../../(apis)/streaks';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { supabase } from '../../config/supabaseConfig';
 import { Fonts, TextStyles } from '../../constants/Fonts';
@@ -1052,24 +1052,20 @@ const TimeLeftCard = ({ timeLeft }) => (
 
 const StreakCard = ({ currentStreak, highestStreak }) => (
   <View style={{ alignItems: 'center', marginBottom: 24 }}>
-    <LinearGradient
-      colors={[COLORS.accent, '#D97706']}
-      style={{
-        width: 120,
-        height: 120,
-        borderRadius: 60,
-        alignItems: 'center',
-        justifyContent: 'center',
-        elevation: 8,
-        shadowColor: COLORS.accent,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.4,
-        shadowRadius: 10,
-      }}
-    >
-      <MaterialCommunityIcons name="fire" size={48} color="#FFF" />
-    </LinearGradient>
-    
+    {/* Headline instead of fire icon */}
+    <Text style={{
+      color: COLORS.text,
+      fontSize: 18,
+      fontFamily: Fonts.GeneralSans.Bold,
+      textAlign: 'center',
+      marginBottom: 18,
+      marginHorizontal: 8,
+      letterSpacing: 0.1,
+    }}>
+      Streaks build the community making this app active,
+      So keep posting daily
+    </Text>
+    {/* Current Streak */}
     <Text style={{
       color: COLORS.text,
       fontSize: 48,
@@ -1084,7 +1080,6 @@ const StreakCard = ({ currentStreak, highestStreak }) => (
     <Text style={{ color: COLORS.textSecondary, fontSize: 16, fontFamily: Fonts.GeneralSans.Semibold, marginTop: 4 }}>
       Current Streak
     </Text>
-    
     {highestStreak > 0 && (
       <View style={{ 
         marginTop: 12, 
@@ -1114,6 +1109,7 @@ const Spotlight = () => {
   useEffect(() => {
     const fetchTopStreakUsers = async () => {
       try {
+        await resetAllInactiveStreaks(); // Reset streaks for inactive users first
         const data = await getStreakLeaderboard(5);
         setTopUsers(data || []);
       } catch (error) {
@@ -1151,12 +1147,15 @@ const Spotlight = () => {
       intensity={60}
       tint="dark"
     >
+      
       <LinearGradient
         colors={['rgba(0, 0, 0, 0.85)', 'rgba(30, 30, 30, 0.9)', 'rgba(0, 0, 0, 0.85)']}
         style={{
           padding: 24,
         }}
       >
+        {/* <TouchableOpacity onPress={() => {resetAllInactiveStreaks()}}>  <Ionicons name="refresh" size={24} color={COLORS.text} /></TouchableOpacity> */}
+        
         <View style={{ 
           alignItems: 'center', 
           marginBottom: 24,
@@ -1233,7 +1232,7 @@ const Spotlight = () => {
                       }}>
                         {index + 1}
                       </Text>
-                    </View>
+                    </View> 
                     <View style={{ flex: 1 }}>
                       <Text style={{
                         color: COLORS.text,
@@ -1270,16 +1269,7 @@ const Spotlight = () => {
                       }}>
                         current 🔥
                       </Text>
-                      {user.highest_streak > 0 && (
-                        <Text style={{
-                          color: position.text,
-                          fontSize: 12,
-                          opacity: 0.7,
-                          marginTop: 2,
-                        }}>
-                          Best: {user.highest_streak}
-                        </Text>
-                      )}
+                    
                     </View>
                   </LinearGradient>
                 </BlurView>
@@ -1372,19 +1362,24 @@ const StreakInfoCard = () => (
               flex: 1, 
               color: COLORS.textSecondary, 
               fontSize: 14, 
+              fontFamily: Fonts.GeneralSans.Regular,
               lineHeight: 20,
             }}>
-              Create <Text style={{ color: COLORS.text, fontWeight: '600' }}>1 post</Text> per day to maintain your streak
+              Create <Text style={{ color: COLORS.text, fontWeight: '600',              fontFamily: Fonts.GeneralSans.Regular,
+ }}>1 post</Text> per day to maintain your streak
             </Text>
           </View>
           
           <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-            <Text style={{ color: COLORS.accent, fontSize: 16, marginRight: 8 }}>💬</Text>
+            <Text style={{ color: COLORS.accent, fontSize: 16, marginRight: 8 ,              fontFamily: Fonts.GeneralSans.Regular,
+}}>💬</Text>
             <Text style={{ 
               flex: 1, 
               color: COLORS.textSecondary, 
               fontSize: 14, 
               lineHeight: 20,
+              fontFamily: Fonts.GeneralSans.Regular,
+
             }}>
               OR comment on <Text style={{ color: COLORS.text, fontWeight: '600' }}>5 other users' posts</Text> per day
             </Text>
@@ -1397,6 +1392,8 @@ const StreakInfoCard = () => (
               color: COLORS.textSecondary, 
               fontSize: 14, 
               lineHeight: 20,
+              fontFamily: Fonts.GeneralSans.Regular,
+
             }}>
               Streak resets to <Text style={{ color: '#EF4444', fontWeight: '600' }}>0</Text> if you miss a day
             </Text>
@@ -1409,6 +1406,8 @@ const StreakInfoCard = () => (
               color: COLORS.textSecondary, 
               fontSize: 14, 
               lineHeight: 20,
+              fontFamily: Fonts.GeneralSans.Regular,
+
             }}>
               Your <Text style={{ color: COLORS.text, fontWeight: '600' }}>highest streak</Text> is always saved
             </Text>

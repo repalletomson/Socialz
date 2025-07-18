@@ -380,7 +380,7 @@
 // // // const AUTH_KEY = 'AUTH_STATE';
 
 // // // export const useAuthStore = create((set, get) => {
-// // //   const loggedSet = async (newState) => {
+// // //   const loggedSet = (newState) => {
 // // //     set((prev) => {
 // // //       const next = typeof newState === 'function' ? newState(prev) : newState;
       
@@ -799,7 +799,7 @@
         
 // //         // Auth state changes
 // //         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-// //           console.log('�� Auth state changed:', event);
+// //           console.log('🔐 Auth state changed:', event);
 // //           if (event === 'SIGNED_OUT') {
 // //             await loggedSet({ 
 // //               isAuthenticated: false, 
@@ -829,7 +829,7 @@
 // //         netInfoUnsubscribe = NetInfo.addEventListener((state) => {
 // //           const currentUser = get().user;
 // //           if (state.isConnected && currentUser) {
-// //             console.log('�� Network connected, refreshing session');
+// //             console.log('🌐 Network connected, refreshing session');
 // //             checkSessionAndUpdate();
 // //           }
 // //         });
@@ -897,6 +897,67 @@
 // //     // Update college selection status
 // //     updateCollegeSelected: (isSelected) => {
 // //       set(prev => ({ ...prev, isCollegeSelected: isSelected }));
+// //     },
+
+// //     // Update user details
+// //     updateUserDetails: async (userData) => {
+// //       console.log('👤 Updating user details');
+// //       const currentState = get();
+// //       await loggedSet({
+// //         ...currentState,
+// //         user: {
+// //           ...currentState.user,
+// //           ...userData
+// //         }
+// //       });
+// //     },
+
+// //     // Update user profile (for onboarding completion)
+// //     updateUserProfile: async (profileData) => {
+// //       try {
+// //         console.log('📝 Updating user profile:', profileData);
+// //         const currentUser = get().user;
+        
+// //         if (!currentUser?.id) {
+// //           console.error('❌ No user ID found');
+// //           return false;
+// //         }
+
+// //         const { data, error } = await supabase
+// //           .from('users')
+// //           .update(profileData)
+// //           .eq('id', currentUser.id)
+// //           .select()
+// //           .single();
+
+// //         if (error) {
+// //           console.error('❌ Profile update failed:', error);
+// //           return false;
+// //         }
+
+// //         console.log('✅ Profile updated successfully');
+        
+// //         // Update local state
+// //         await loggedSet({
+// //           ...get(),
+// //           user: {
+// //             ...currentUser,
+// //             ...data,
+// //             fullName: data.full_name,
+// //             profileImage: data.profile_image,
+// //             photoURL: data.profile_image,
+// //             about: data.bio,
+// //             passoutYear: data.passout_year,
+// //           },
+// //           isProfileComplete: true,
+// //           isCollegeSelected: true,
+// //         });
+
+// //         return true;
+// //       } catch (error) {
+// //         console.error('❌ Profile update error:', error);
+// //         return false;
+// //       }
 // //     },
 
 // //     // Cleanup
@@ -1228,8 +1289,8 @@ logout: async () => {
       console.warn('⚠️ AsyncStorage clear failed:', storageError);
     }
     
-    // Clear state - this is the most important part
-    set({ 
+    // Clear state using loggedSet for consistent logging
+    await loggedSet({ 
       user: null, 
       isAuthenticated: false,
       isProfileComplete: false,
@@ -1241,7 +1302,7 @@ logout: async () => {
     console.error('❌ Logout failed:', error);
     
     // Force clear state even if logout fails
-    set({ 
+    await loggedSet({ 
       user: null, 
       isAuthenticated: false,
       isProfileComplete: false,
@@ -1299,26 +1360,45 @@ logout: async () => {
       try {
         console.log('📝 Updating user profile:', profileData);
         const currentUser = get().user;
-        
+    
         if (!currentUser?.id) {
           console.error('❌ No user ID found');
           return false;
         }
-
+    
+        // Prepare data for Supabase with proper typing
+        const updateData = {
+          ...profileData,
+          college: typeof profileData.college === 'string' ? profileData.college : (profileData.college?.name || ''), // Store as string only
+          interests: Array.isArray(profileData.interests) ? profileData.interests : [], // Ensure interests is an array
+          full_name: profileData.full_name || profileData.fullName, // Handle both camelCase and snake_case
+          profile_image: profileData.profile_image || profileData.profileImage,
+          bio: profileData.bio || profileData.about,
+          passout_year: profileData.passout_year,
+          username: profileData.username?.toLowerCase().trim(),
+          updated_at: new Date(), // Trigger the update trigger
+        };
+        Object.keys(updateData).forEach(key => {
+          if (updateData[key] === undefined || updateData[key] === null) {
+            delete updateData[key];
+          }
+        });
+        console.log('Update Data for Supabase:', updateData);
+    
         const { data, error } = await supabase
           .from('users')
-          .update(profileData)
+          .update(updateData)
           .eq('id', currentUser.id)
           .select()
           .single();
-
+    
         if (error) {
-          console.error('❌ Profile update failed:', error);
+          console.error('❌ Profile update failed:', error.message);
           return false;
         }
-
+    
         console.log('✅ Profile updated successfully');
-        
+    
         // Update local state
         await loggedSet({
           ...get(),
@@ -1332,16 +1412,15 @@ logout: async () => {
             passoutYear: data.passout_year,
           },
           isProfileComplete: true,
-          isCollegeSelected: true,
+          isCollegeSelected: !!data.college, // Update based on college presence
         });
-
+    
         return true;
       } catch (error) {
-        console.error('❌ Profile update error:', error);
+        console.error('❌ Profile update error:', error.message);
         return false;
       }
     },
-
     // Cleanup
     cleanup: () => {
       console.log('🧹 Cleaning up auth store...');
@@ -1360,3 +1439,4 @@ logout: async () => {
     }
   };
 });
+

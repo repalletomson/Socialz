@@ -148,7 +148,7 @@ export default function PostDetailView() {
         return;
       }
       if (commentsData) {
-        setComments(commentsData);
+        setComments(organizeComments(commentsData));
       }
     } catch (error) {
       console.error('❌ Error fetching comments:', error);
@@ -381,31 +381,36 @@ export default function PostDetailView() {
     const userName = item.user_name || 'Anonymous';
     const content = item.content || '';
     const isAnonymousUser = item.is_anonymous;
-    const avatarBgColor = isAnonymousUser ? getColorFromPseudonym(userName) : COLORS.inputBg;
-    const avatarText = isAnonymousUser ? 'A' : userName.charAt(0).toUpperCase();
+    // Use a consistent background color for anonymous avatars
+    const avatarBgColor = COLORS.inputBg;
+    // Use the same icon as the input field toggle for anonymous
     return (
       <View
         key={item.id}
         style={{
           backgroundColor: isReply ? 'rgba(139,92,246,0.07)' : COLORS.cardBg,
           marginBottom: 4,
-          marginLeft: isReply ? 0 : 0,
+          marginLeft: isReply ? 32 : 0, // Indent replies
           borderRadius: 12,
           padding: 10,
         }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
           <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: avatarBgColor, justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
-            <Text style={{ color: COLORS.text, fontSize: 18, fontWeight: '700' }}>{avatarText}</Text>
+            {isAnonymousUser ? (
+              <FontAwesome5 name="user-secret" size={18} color="#fff" />
+            ) : (
+              <Text style={{ color: COLORS.text, fontSize: 18, fontWeight: '700' }}>{userName.charAt(0).toUpperCase()}</Text>
+            )}
           </View>
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-              <Text style={{ color: COLORS.text, fontSize: 16, fontFamily: Fonts.GeneralSans.Bold, marginRight: 8 }}>{userName}</Text>
+              <Text style={{ color: COLORS.text, fontSize: 13, fontFamily: Fonts.GeneralSans.Bold, marginRight: 8 }}>{userName}</Text>
               <TouchableOpacity onPress={() => setCommentOptions({ id: item.id, isOwn: isOwnComment })} style={{ padding: 4 }}>
                 <Ionicons name="ellipsis-horizontal" size={18} color={COLORS.textSecondary} />
               </TouchableOpacity>
             </View>
-            <Text style={{ color: COLORS.text, fontSize: 15, lineHeight: 22, fontFamily: Fonts.GeneralSans.Regular }}>{content}</Text>
+            <Text style={{ color: COLORS.text, fontSize: 13, lineHeight: 20, fontFamily: Fonts.GeneralSans.Regular }}>{content}</Text>
             {/* Only show Reply for main comments */}
             {!isReply && (
               <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6 }}>
@@ -419,11 +424,10 @@ export default function PostDetailView() {
             )}
           </View>
         </View>
-        {/* Replies: group with a single vertical line */}
+        {/* Replies: group at bottom right of parent comment */}
         {!isReply && item.replies && item.replies.length > 0 && (
-          <View style={{ flexDirection: 'row', marginTop: 4, marginLeft: 32 }}>
-            <View style={{ width: 1.5, backgroundColor: COLORS.accent, borderRadius: 1, marginRight: 10, marginTop: 2, marginBottom: 2 }} />
-            <View style={{ flex: 1 }}>
+          <View style={{ alignItems: 'flex-end', marginTop: 8 }}>
+            <View style={{ width: '90%' }}>
               {item.replies.map(reply => renderCommentItem(reply, true))}
             </View>
           </View>
@@ -649,7 +653,7 @@ export default function PostDetailView() {
 
   if (!post) return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
-      <Text style={{ color: COLORS.text, fontSize: 18 }}>Loading...</Text>
+      <Text style={{ color: COLORS.text, fontSize: 18 }}>Socialz.</Text>
     </SafeAreaView>
   );
 
@@ -679,8 +683,8 @@ export default function PostDetailView() {
           </TouchableOpacity>
           <View style={{ flex: 1, alignItems: 'center', position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, justifyContent: 'center', pointerEvents: 'none' }}>
             <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center' }}>
-              <Text style={{ fontSize: 16, color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Medium, marginRight: 2, letterSpacing: -1 }}>social</Text>
-              <Text style={{ fontSize: 24, color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Bold, letterSpacing: -2 }}>z.</Text>
+              <Text style={{ fontSize: 16, color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Medium, marginRight: 2 }}>Social</Text>
+              <Text style={{ fontSize: 16, color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Bold }}>z.</Text>
             </View>
           </View>
           <View style={{ width: 24 }} />
@@ -712,7 +716,7 @@ export default function PostDetailView() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ color: COLORS.text, fontSize: 16, fontFamily: Fonts.GeneralSans.Bold }}>
-                  {post?.username ? `@${post.username}` : 'Anonymous'}
+                  {post?.user_name ? `@${post.user_name}` : 'Anonymous'}
                 </Text>
                 <Text style={{ color: COLORS.textMuted, fontSize: 13, fontFamily: Fonts.GeneralSans.Regular, marginTop: 2 }}>
                   {formatTimestamp(post?.createdAt)}
@@ -870,7 +874,7 @@ export default function PostDetailView() {
             </View>
             <Text style={{ 
               color: COLORS.text, 
-              fontSize: 20, 
+              fontSize: 16, 
               fontFamily: Fonts.GeneralSans.Bold, 
               marginBottom: 20 
             }}>
@@ -920,7 +924,7 @@ export default function PostDetailView() {
                 width: 36,
                 height: 36,
                 borderRadius: 18,
-                backgroundColor: isAnonymous ? COLORS.accent : COLORS.textMuted,
+                backgroundColor: isAnonymous ? '#000' : COLORS.textMuted,
                 alignItems: 'center',
                 justifyContent: 'center',
                 borderWidth: 2,
@@ -938,7 +942,7 @@ export default function PostDetailView() {
               ref={commentInputRef}
               value={newComment}
               onChangeText={setNewComment}
-              placeholder={isAnonymous ? "Comment as anonymous..." : "Add a comment..."}
+              placeholder={isAnonymous ? "Comment as Incognito user..." : "Add a comment..."}
               placeholderTextColor={COLORS.textSecondary}
               style={{ flex: 1, color: COLORS.text, fontSize: 15, paddingVertical: 10, fontFamily: Fonts.GeneralSans.Regular, backgroundColor: 'transparent' }}
               multiline

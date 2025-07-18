@@ -26,7 +26,7 @@ import { getFeedPosts } from '../../../(apis)/post';
 import PostCard from '../../../components/PostCard';
 import MotivationalCarousel from '../../../components/MotivationalCarousel';
 import { useAuthStore } from '../../../stores/useAuthStore';
-import CreatePostScreen from '../../../components/CreatePost';
+// import CreatePost from '../../../components/CreatePost';
 import { AppText } from '../../_layout';
 import { router } from 'expo-router';
 import { safeNavigate, clearNavigationState } from '../../../utiles/safeNavigation';
@@ -35,7 +35,7 @@ import { useSafeNavigation } from '../../../hooks/useSafeNavigation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import EventEmitter from '../../../utiles/EventEmitter';
 import networkErrorHandler from '../../../utiles/networkErrorHandler';
-import { getUserStreak, subscribeToStreakChanges } from '../../../(apis)/streaks';
+import { getUserStreak, subscribeToStreakChanges, resetAllInactiveStreaks } from '../../../(apis)/streaks';
 import { Fonts, TextStyles } from '../../../constants/Fonts';
 import { scaleSize, verticalScale } from '../../../utiles/common';
 // import {useStreak} from '../../../hooks/useStreak';
@@ -124,6 +124,7 @@ export default function EnhancedHome() {
       (async () => {
         try {
           setStreakLoading(true);
+
           const streakData = await getUserStreak(user.id);
           if (isMounted.current) {
             setCurrentStreak(streakData?.current_streak || 0);
@@ -630,7 +631,7 @@ export default function EnhancedHome() {
     fetchUser();
   }, []);
 
-  if (loading) return <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: '#fff' }}>Loading...</Text></View>;
+  if (loading) return <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: '#fff' }}>Socialz.</Text></View>;
 
   return (
     <SafeViewErrorBoundary>
@@ -661,10 +662,7 @@ export default function EnhancedHome() {
         {loading && posts.length === 0 ? (
           <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
             <View style={{ alignItems: 'center', marginBottom: 24 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center' }}>
-                <Text style={{ fontSize: scaleSize(32), color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Medium, marginRight: 2, letterSpacing: -1 }}>social</Text>
-                <Text style={{ fontSize: scaleSize(44), color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Bold, letterSpacing: -2 }}>z.</Text>
-              </View>
+              <Text style={{ fontSize: scaleSize(32), color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Medium, marginRight: 2, letterSpacing: -1 }}>Socialz.</Text>
               <Text style={{ color: '#A1A1AA', fontSize: scaleSize(18), marginTop: 8, fontFamily: Fonts.GeneralSans.Medium }}>Loading..</Text>
             </View>
           </View>
@@ -674,9 +672,28 @@ export default function EnhancedHome() {
             renderItem={({ item }) => <PostCard post={item} />}
             keyExtractor={(item) => item.id.toString()}
             ListHeaderComponent={renderHeader}
+            ListEmptyComponent={
+              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 60 }}>
+                <MaterialCommunityIcons name="emoticon-happy-outline" size={48} color={colors.accent} style={{ marginBottom: 12 }} />
+                <Text style={{ color: colors.text, fontSize: 18, fontFamily: Fonts.GeneralSans.Bold, textAlign: 'center', marginBottom: 8 }}>
+                  No posts yet! Add your First post
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 15, fontFamily: Fonts.GeneralSans.Medium, textAlign: 'center', maxWidth: 260 }}>
+                  Be the first to post and inspire the community. Share your thoughts or something cool!
+                </Text>
+              </View>
+            }
+            ListFooterComponent={
+              <View style={{ alignItems: 'center', justifyContent: 'center', marginVertical: 32 }}>
+                {/* <MaterialCommunityIcons name="book-open-variant" size={36} color={colors.accent} style={{ marginBottom: 8 }} /> */}
+                <Text style={{ color: "white", fontSize: 15, fontFamily: Fonts.GeneralSans.Bold, textAlign: 'center' }}>
+                 " Nothing more here—maybe add your posts"
+                </Text>
+              </View>
+            }
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 60 }}
-          onScroll={handleScroll}
+            contentContainerStyle={{ paddingBottom: 120, flexGrow: 1 }}
+            onScroll={handleScroll}
             refreshControl={
               <RefreshControl
           refreshing={refreshing}
@@ -692,7 +709,7 @@ export default function EnhancedHome() {
           />
         )}
         
-        <Modal
+        {/* <Modal
           animationType="slide"
           transparent={false}
           visible={isModalVisible}
@@ -705,7 +722,7 @@ export default function EnhancedHome() {
               setFilteredPosts(prevPosts => [newPost, ...prevPosts]);
             }}
           />
-        </Modal>
+        </Modal> */}
         {/* Floating Create Post Button */}
         <TouchableOpacity
           style={styles.fab}

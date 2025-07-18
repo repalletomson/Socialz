@@ -126,7 +126,7 @@ const getUserInfo = (user) => {
   if (!user) return null;
   return {
     id: getUserId(user),
-    name: user?.full_name || user?.displayName || user?.name || 'Anonymous',
+    name: user?.full_name || user?.displayName || user?.user_name || 'Anonymous',
     avatar: user?.profile_image || user?.photoURL || user?.avatar || DEFAULT_AVATAR,
     college: user?.college || user?.education_details?.college || null,
   };
@@ -166,7 +166,7 @@ const PostCard = ({ post, isDetailView = false, isHotPost = false, enableRealTim
       const deepLink = `socialz://post/${post.id}`; // Deep link to post detail view
       const playStoreLink = "https://play.google.com/store/apps/details?id=com.student.app"; // Your actual Android package
       const appStoreLink = "https://apps.apple.com/app/socialz/id123456789"; // Replace with your actual App Store ID
-      const username = post.userName || post.user_name || post.username || 'Anonymous';
+      const username = post.userName || post.user_name || post.user_name || 'Anonymous';
       
       // Create a more shareable message with clickable links
       const shareMessage = `${post.title ? post.title + '\n\n' : ''}${post.content}\n\nPosted by @${username}\n\n${appDescription}\n\n📱 Download ${appName}:\nAndroid: ${playStoreLink}\niOS: ${appStoreLink}\n\n🔗 View this post: ${playStoreLink}\n\n#SocialZ #StudentNetworking #CollegeLife`;
@@ -585,14 +585,18 @@ const PostCard = ({ post, isDetailView = false, isHotPost = false, enableRealTim
         // Only check user-specific data if user is logged in
         if (currentUserId) {
           // Always check if the user has liked this post using the correct user ID
-          const userLiked = await hasUserLiked(post.id, { uid: currentUserId });
+          const userLiked = await hasUserLiked(post.id, currentUserId); // FIX: pass userId directly
           setIsLiked(!!userLiked); // Ensure boolean
-          const userSaved = await hasUserSaved(post.id, { uid: currentUserId });
+          const userSaved = await hasUserSaved(post.id, currentUserId);
           setIsSaved(!!userSaved);
         } else {
           setIsLiked(false);
           setIsSaved(false);
         }
+
+        // Always fetch the latest like count from backend for accuracy
+        const actualLikes = await getLikes(post.id);
+        setLikes(Array.isArray(actualLikes) ? actualLikes.length : (post.like_count || 0));
 
         const fetchedShareCount = await getShareCount(post.id);
         setShareCount(fetchedShareCount || 0);
@@ -839,7 +843,7 @@ const PostCard = ({ post, isDetailView = false, isHotPost = false, enableRealTim
 
     try {
       console.log("Deleting post:", post.id, "by user:", currentUserId);
-      await deletePost(post.id, { uid: currentUserId });
+      await deletePost(post.id,  currentUserId );
       
       // Emit an event to notify other components (like the feed)
       EventEmitter.emit('post-deleted', post.id);
@@ -954,13 +958,13 @@ const PostCard = ({ post, isDetailView = false, isHotPost = false, enableRealTim
             <View style={{ flex: 1 }}>
               <Text
                 style={{
-                  fontFamily: Fonts.GeneralSans.Semibold,
+                  fontFamily: Fonts.GeneralSans.Bold,
                   fontSize: 16,
                   color: isHotPost ? colors.accent : colors.text,
                   marginBottom: 2,
                 }}
               >
-                @{displayName.toLowerCase()}
+                @{post.user_name || post.user_username || displayName.toLowerCase()}
                 {isHotPost && <Text style={{ fontSize: 12, color: colors.accent, marginLeft: 6, fontFamily: Fonts.GeneralSans.Medium }}>{" 🔥"}</Text>}
               </Text>
               

@@ -139,7 +139,7 @@ const ProfilePostCard = ({ post }) => {
       const appDescription = "Your ultimate student networking platform!";
       const deepLink = `socialz://post/${post.id}`; // Deep link to post detail view
       const playStoreLink = "https://play.google.com/store/apps/details?id=com.student.app"; // Your actual Android package
-      const appStoreLink = "https://apps.apple.com/app/socialz/id123456789"; // Replace with your actual App Store ID
+
       const username = post.userName || post.user_name || post.username || 'Anonymous';
       
       // Create a more shareable message with clickable links
@@ -234,13 +234,7 @@ const ProfilePostCard = ({ post }) => {
         }}>
           <TouchableOpacity 
             style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
-            onPress={async () => {
-              try {
-                await safeNavigate(`/profile/${post.userId}`, { push: true });
-              } catch (error) {
-                router.push(`/profile/${post.userId}`);
-              }
-            }}
+    
           >
             {/* Profile initials instead of image */}
             <View style={{
@@ -263,7 +257,7 @@ const ProfilePostCard = ({ post }) => {
               <Text
                 style={{ ...TextStyles.body2, color: colors.text, marginBottom: 2 }}
               >
-                @{post.username || post.user_username || (post.userName || post.user_name || 'anonymous').toLowerCase()}
+                @{post.user_name || post.user_username || (post.userName || post.user_name || 'anonymous').toLowerCase()}
               </Text>
               
               <Text style={{ ...TextStyles.caption, color: colors.textSecondary }}>

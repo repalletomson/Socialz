@@ -359,6 +359,7 @@ export const getLikes = async (postId) => {
 // Delete post with images
 export const deletePost = async (postId, userId) => {
   try {
+    console.log("Deleting post:", postId, "by user:", userId);
     // Validate UUID format
     if (!isValidUUID(postId)) {
       return false;
@@ -370,6 +371,8 @@ export const deletePost = async (postId, userId) => {
       .select('user_id, images')
       .eq('id', postId)
       .single();
+    console.log("Post:", post);
+
 
     if (fetchError) {
       throw fetchError;

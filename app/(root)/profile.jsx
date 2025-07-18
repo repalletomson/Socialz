@@ -19,7 +19,8 @@ import ProfilePostCard from '../../components/ProfilePostCard';
 import { Fonts, TextStyles } from '../../constants/Fonts';
 import { scaleSize, verticalScale } from '../../utiles/common';
 import { useFocusEffect } from '@react-navigation/native';
-
+import { useAuthStore } from '../../stores/useAuthStore';
+import { AppText } from '../_layout';
 // Consistent Color Palette - Black Theme with Purple Accents
 const COLORS = {
   background: '#000000',
@@ -34,12 +35,14 @@ const COLORS = {
 };
 
 const Profile = () => {
+  const { user: globalUser, isAuthenticated } = useAuthStore();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const isMounted = useRef(true);
   
   const router = useRouter();
+  const { logout } = useAuthStore();
 
   const [activeTab, setActiveTab] = useState('About');
   const tabs = ['About', 'Posts', 'Saved Posts'];
@@ -94,9 +97,9 @@ const Profile = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await supabase.auth.signOut();
-              // Don't manually navigate - let the auth context handle it
-              // The auth context will automatically redirect when isAuthenticated becomes false
+              // Use the auth store's logout method for consistent state management
+              await logout();
+              // The auth store will handle navigation automatically
             } catch (error) {
               console.error('Error during logout:', error);
               Alert.alert('Error', 'Failed to logout. Please try again.');
@@ -132,29 +135,16 @@ const Profile = () => {
   // Show loading state
   if (loading) {
     return (
-      <View style={{ 
-        flex: 1, 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        backgroundColor: COLORS.background 
-      }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background }}>
         <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
-        <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
-          <View style={{ alignItems: 'center', marginBottom: 24 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center' }}>
-              <Text style={{ fontSize: scaleSize(32), color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Medium, marginRight: 2, letterSpacing: -1 }}>social</Text>
-              <Text style={{ fontSize: scaleSize(44), color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Bold, letterSpacing: -2 }}>z.</Text>
-            </View>
-            <Text style={{ color: '#A1A1AA', fontSize: scaleSize(18), marginTop: 8, fontFamily: Fonts.GeneralSans.Medium }}>Loading...</Text>
-          </View>
-          <ActivityIndicator size="large" color="#8B5CF6" />
-        </View>
+        <ActivityIndicator size="large" color={COLORS.accent} />
       </View>
     );
   }
 
-  // Show authentication required if not logged in
-  if (!user) {
+  const displayUser = user || globalUser;
+
+  if (!displayUser) {
     return (
       <View style={{ 
         flex: 1, 
@@ -213,8 +203,7 @@ const Profile = () => {
         paddingBottom: 16,
       }}>
         <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
-          <Text style={{ fontSize: 26, color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Medium, marginRight: 2, letterSpacing: -1 }}>social</Text>
-          <Text style={{ fontSize: 30, color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Bold, letterSpacing: -2 }}>z.</Text>
+          <Text style={{ fontSize: 26, color: '#FFFFFF', fontFamily: Fonts.GeneralSans.Medium, marginRight: 2, letterSpacing: -1 }}>Socialz.</Text>
         </View>
         <TouchableOpacity
           onPress={() => router.push('/(root)/settings')}
@@ -395,7 +384,7 @@ const Profile = () => {
               <Text style={{
                 color: activeTab === tab ? COLORS.accent : COLORS.textMuted,
                 fontSize: 15,
-                fontFamily: Fonts.GeneralSans.Semibold,
+                fontFamily: Fonts.GeneralSans.Medium,
                 textAlign: 'center',
               }}>
                 {tab}
@@ -414,6 +403,7 @@ const Profile = () => {
                   backgroundColor: COLORS.cardBg,
                   borderRadius: 12,
                   borderWidth: 1,
+                  fontFamily: Fonts.GeneralSans.Regular,
                   borderColor: COLORS.border,
                   overflow: 'hidden',
                 }}>
@@ -424,6 +414,7 @@ const Profile = () => {
                   }}>
                     <Text style={{
                       color: COLORS.text,
+                      fontFamily: Fonts.GeneralSans.Bold,
                       fontSize: 16,
                       fontWeight: '600',
                       marginBottom: 8,
@@ -437,15 +428,16 @@ const Profile = () => {
                       flexDirection: 'row',
                       alignItems: 'center',
                       padding: 16,
+                      fontFamily: Fonts.GeneralSans.Semibold,
                       borderBottomWidth: user?.branch || user?.passout_year ? 1 : 0,
                       borderBottomColor: COLORS.border,
                     }}>
                       <Ionicons name="school-outline" size={20} color={COLORS.accent} />
                       <View style={{ marginLeft: 12, flex: 1 }}>
-                        <Text style={{ color: COLORS.textSecondary, fontSize: 15, fontWeight: '500' }}>
+                        <Text style={{ color: COLORS.textSecondary, fontSize: 15, fontWeight: '500',fontFamily: Fonts.GeneralSans.Bold }}>
                           {user.college}
                         </Text>
-                        <Text style={{ color: COLORS.textMuted, fontSize: 13 }}>
+                        <Text style={{ color: COLORS.textMuted, fontSize: 13,fontFamily: Fonts.GeneralSans.Regular }}>
                           College/University
                         </Text>
                       </View>
@@ -462,10 +454,10 @@ const Profile = () => {
                     }}>
                       <Ionicons name="book-outline" size={20} color={COLORS.accent} />
                       <View style={{ marginLeft: 12, flex: 1 }}>
-                        <Text style={{ color: COLORS.textSecondary, fontSize: 15, fontWeight: '500' }}>
+                        <Text style={{ color: COLORS.textSecondary, fontSize: 15, fontWeight: '500',fontFamily: Fonts.GeneralSans.Bold }}>
                           {user.branch}
                         </Text>
-                        <Text style={{ color: COLORS.textMuted, fontSize: 13 }}>
+                        <Text style={{ color: COLORS.textMuted, fontSize: 13,fontFamily: Fonts.GeneralSans.Regular }}>
                           Branch/Course
                         </Text>
                       </View>
@@ -480,10 +472,10 @@ const Profile = () => {
                     }}>
                       <Ionicons name="calendar-outline" size={20} color={COLORS.accent} />
                       <View style={{ marginLeft: 12, flex: 1 }}>
-                        <Text style={{ color: COLORS.textSecondary, fontSize: 15, fontWeight: '500' }}>
+                        <Text style={{ color: COLORS.textSecondary, fontSize: 15, fontWeight: '500' ,fontFamily: Fonts.GeneralSans.Bold}}>
                           Class of {user.passout_year}
                         </Text>
-                        <Text style={{ color: COLORS.textMuted, fontSize: 13 }}>
+                        <Text style={{ color: COLORS.textMuted, fontSize: 13,fontFamily: Fonts.GeneralSans.Regular }}>
                           Expected Graduation
                         </Text>
                       </View>

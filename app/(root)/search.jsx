@@ -248,7 +248,7 @@ const SearchPage = () => {
             marginTop: 16,
             fontFamily: Fonts.GeneralSans.Medium,
           }}>
-            Searching...
+            Socialz.
           </Text>
         </View>
       );
@@ -277,6 +277,7 @@ const SearchPage = () => {
             color: COLORS.textMuted,
             fontSize: 14,
             marginTop: 8,
+            fontFamily: Fonts.GeneralSans.Regular,
             textAlign: 'center',
             lineHeight: 20,
           }}>
@@ -316,6 +317,7 @@ const SearchPage = () => {
                   fontSize: 16,
                   marginLeft: 12,
                   flex: 1,
+                  fontFamily: Fonts.GeneralSans.Regular,
                 }}>
                   {search}
                 </Text>

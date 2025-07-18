@@ -44,7 +44,9 @@ const colors = {
 };
 
 const currentYear = new Date().getFullYear();
-const passoutYears = Array.from({ length: 12 }, (_, i) => currentYear + 6 - i).reverse();
+const startYear = 2022;
+const endYear = currentYear + 6;
+const passoutYears = Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i);
 
 // Engineering colleges with short forms and search keywords
 const engineeringColleges = [
@@ -295,9 +297,11 @@ const allBranches = [
 ];
 
 export default function EducationDetailsStep({ prevStep, finishOnboarding, userData, updateUserData }) {
-  const [college, setCollege] = useState(userData?.college || '');
-  const [branch, setBranch] = useState(userData?.branch || '');
-  const [passoutYear, setPassoutYear] = useState(userData?.passoutYear || '');
+
+  const [college, setCollege] = useState(userData?.college?.name || '');
+const [branch, setBranch] = useState(userData?.branch || '');
+const [passoutYear, setPassoutYear] = useState(userData?.passoutYear || '');
+const [selectedInterests, setSelectedInterests] = useState(userData?.interests || []); // Add this if needed
   const [loading, setLoading] = useState(false);
   const [showYearPicker, setShowYearPicker] = useState(false);
   const [collegeModalVisible, setCollegeModalVisible] = useState(false);
@@ -403,55 +407,62 @@ export default function EducationDetailsStep({ prevStep, finishOnboarding, userD
       Alert.alert('Error', 'Please fill in all education details');
       return;
     }
-
-      setLoading(true);
-    
+  
+    if (!user) {
+      Alert.alert('Error', 'Please log in to continue.');
+      return;
+    }
+  
+    setLoading(true);
+    console.log("userData",userData);
+  
     try {
       const educationData = {
-        college,
+        college:college,
         branch,
         passout_year: passoutYear,
         full_name: userData?.full_name || userData?.fullName,
+        username: userData?.username,
         bio: userData?.bio || userData?.about,
         profile_image: userData?.profile_image || userData?.profileImage,
         onboarding_completed: true,
-        interests: userData?.interests || [], // <-- Add this line
-        username: userData?.username, // <-- Added username to be stored
+        interests: selectedInterests || userData?.interests || [], // Ensure interests is included
       };
-
-      // Update user data in parent component
+  
+      console.log("educationData", educationData);
+  
       updateUserData(educationData);
-
-      // Update profile in Supabase using the auth store method
+  
       const success = await updateUserProfile(educationData);
-
       if (!success) {
-        throw new Error('Failed to update profile');
+        throw new Error('Profile update failed in Supabase');
       }
-
-      // Also update Zustand store with the latest user data (including id)
+  
       updateUserProfile({
         ...user,
         ...educationData,
         onboarding_completed: true,
       });
-
-      // Show success message and finish onboarding
+  
       Alert.alert(
         'Welcome!',
         'Your profile has been set up successfully. You can now start using the app.',
         [
           {
             text: 'Get Started',
-            onPress: () => finishOnboarding()
-          }
+            onPress: () => finishOnboarding(),
+          },
         ]
       );
     } catch (error) {
-      console.error('Error updating education details:', error);
-      Alert.alert('Error', 'Failed to save education details. Please try again.');
+      console.error('Error updating education details:', error.message);
+      if (error.message.includes('No authenticated user')) {
+        Alert.alert('Error', 'Please log in again to save your profile.');
+      } else {
+        Alert.alert('Error', 'Failed to save education details. Please try again.');
+      }
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
 
@@ -795,7 +806,7 @@ export default function EducationDetailsStep({ prevStep, finishOnboarding, userD
             fontWeight: '600',
             marginRight: scaleSize(8),
           }}>
-            {loading ? 'Saving...' : 'Complete'}
+            {loading ? 'Socialz.' : 'Complete'}
           </Text>
           {!loading && <AntDesign name="right" size={20} color={colors.accentText} />}
         </TouchableOpacity>

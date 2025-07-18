@@ -163,26 +163,44 @@ export default function PersonalDetailsStep({ nextStep, userData, updateUserData
       setError('Please select at least one interest.');
       return;
     }
-
+  
     if (!fullName.trim()) {
       Alert.alert('Required Field', 'Please enter your full name.');
       return;
     }
-
+  
     if (!usernameAvailable) {
       Alert.alert('Username Unavailable', 'This username is already taken. Please try a different one.');
       return;
     }
-
+  
+    // Prepare data with interests and correct field names for Supabase
+    const personalDetails = {
+      ...userData,
+      full_name: fullName.trim(), // Use snake_case for Supabase
+      username: username.toLowerCase().trim(), // Ensure username is lowercase and trimmed
+      bio: bio.trim() || null, // Handle empty bio as null
+      profile_initials: profileInitials,
+      interests: selectedInterests, // Explicitly include interests as an array
+    };
+  
+    // Log data for debugging
+    console.log('Personal Details to Update:', personalDetails);
+  
     // Update user data
-    updateUserData({
-      fullName: fullName.trim(),
-      username: username.toLowerCase(),
-      bio: bio.trim(),
-      profileInitials,
-      interests: selectedInterests,
-    });
-
+    updateUserData(personalDetails);
+  
+    // Optionally save to Supabase here if needed before next step.
+    // const { user } = useAuthStore.getState();
+    // if (user?.id) {
+    //   const success = await useAuthStore.getState().updateUserProfile(personalDetails);
+    //   if (!success) {
+    //     Alert.alert('Error', 'Failed to save personal details. Please try again.');
+    //     return;
+    //   }
+    // }
+  
+    
     nextStep();
   };
 

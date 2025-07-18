@@ -371,14 +371,11 @@ export default function AuthScreen() {
     try {
       const { error: otpError } = await supabase.auth.signInWithOtp({
         email: email.trim(),
-        options: {
-          shouldCreateUser: true,
-        },
       });
       if (otpError) throw otpError;
       setSuccess(isResend ? 'Verification code resent! Check your email.' : 'Verification code sent! Check your email.');
       setStep(2);
-      setResendTimer(30);
+      setResendTimer(60);
     } catch (err) {
       setError(err.message || 'Failed to send code.');
     } finally {
@@ -491,7 +488,7 @@ export default function AuthScreen() {
             params: { userId: userId }
           });
       } else {
-          console.log('🏠 Profile complete, redirecting to home');
+        console.log('🏠 Profile complete, redirecting to home');
         router.replace('/(root)/(tabs)/home');
         }
       }
@@ -511,7 +508,7 @@ export default function AuthScreen() {
     >
       <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
       <View style={styles.container}>
-        <Text style={styles.title}>Welcome to SocialZ</Text>
+        <Text style={styles.title}>Welcome to Socialz.</Text>
         <Text style={styles.subtitle}>Sign in or create an account</Text>
         
         {step === 1 && (
