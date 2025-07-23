@@ -192,8 +192,9 @@ const SettingsPage = () => {
             if (deleting || !isMountedRef.current) return;
             setDeleting(true);
             try {
-              isMountedRef.current = false; // Set after navigation 
-              attempt
+             const res = await deleteUserDataFromFirebase(user.id); // Clean up in Firebase
+             console.log("res",res);
+
               const { data, error } = await supabase.functions.invoke
               ('smart-service', {
                 body: {
@@ -206,7 +207,7 @@ const SettingsPage = () => {
               if (error) throw error;
               if (data?.error) throw new Error(data.error);
               console.log('✅ Account deleted successfully');
-              await deleteUserDataFromFirebase(user.id); // Clean up in Firebase
+              // await deleteUserDataFromFirebase(user.id); // Clean up in Firebase
               await logout();
               if (isMountedRef.current) {
                 router.replace('/(auth)/auth');

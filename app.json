@@ -33,7 +33,7 @@
         "android.permission.RECORD_AUDIO"
       ],
       "softwareKeyboardLayoutMode": "pan",
-      "package": "com.student.app",
+      "package": "com.vinoothna.mycareerpath",
       "icon": "./assets/images/logo.png"
     },
     "web": {

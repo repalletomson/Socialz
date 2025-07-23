@@ -38,41 +38,6 @@
       "api_key": [
         {
           "current_key": "AIzaSyCks9Gqw8WZN2Su_ky0knGC_RU6L0kiK6s"
-        },
-        {
-          "current_key": "AIzaSyDl10pWkQHwYivuBLITOLWbwmceQ8u11cU"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "1076535842721-f78nis65bj3uon79pg4vajj0rvm1gc99.apps.googleusercontent.com",
-              "client_type": 3
-            }
-          ]
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:1076535842721:android:162311d14b9a4252a59de0",
-        "android_client_info": {
-          "package_name": "com.vinoothna.mycareerpath"
-        }
-      },
-      "oauth_client": [
-        {
-          "client_id": "1076535842721-f78nis65bj3uon79pg4vajj0rvm1gc99.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
-      "api_key": [
-        {
-          "current_key": "AIzaSyCks9Gqw8WZN2Su_ky0knGC_RU6L0kiK6s"
-        },
-        {
-          "current_key": "AIzaSyDl10pWkQHwYivuBLITOLWbwmceQ8u11cU"
         }
       ],
       "services": {

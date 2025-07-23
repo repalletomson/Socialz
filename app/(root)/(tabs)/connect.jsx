@@ -1171,7 +1171,7 @@ const ProfileModal = ({ user, visible, onClose }) => (
                 try {
                   const appName = "SocialZ";
                   const appDescription = "Your ultimate student networking platform!";
-                  const playStoreLink = "https://play.google.com/store/apps/details?id=com.student.app";
+                  const playStoreLink = "https://play.google.com/store/apps/details?id=com.vinoothna.mycareerpath";
                  
                   const shareMessage = `${appDescription}\n\n📱 Download ${appName}:\nAndroid: ${playStoreLink}\niOS: ${appStoreLink}\n\n#SocialZ #StudentNetworking #CollegeLife`;
                   await Share.share({

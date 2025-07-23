@@ -164,7 +164,7 @@ const PostCard = ({ post, isDetailView = false, isHotPost = false, enableRealTim
       const appName = "SocialZ";
       const appDescription = "Your ultimate student networking platform!";
       const deepLink = `socialz://post/${post.id}`; // Deep link to post detail view
-      const playStoreLink = "https://play.google.com/store/apps/details?id=com.student.app"; // Your actual Android package
+      const playStoreLink = "https://play.google.com/store/apps/details?id=com.vinoothna.mycareerpath"; // Your actual Android package
       const appStoreLink = "https://apps.apple.com/app/socialz/id123456789"; // Replace with your actual App Store ID
       const username = post.userName || post.user_name || post.user_name || 'Anonymous';
       

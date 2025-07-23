@@ -1,4 +1,4 @@
-package com.student.app
+package com.vinoothna.mycareerpath
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

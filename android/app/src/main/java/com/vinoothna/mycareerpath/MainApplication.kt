@@ -1,4 +1,4 @@
-package com.student.app
+package com.vinoothna.mycareerpath
 
 import android.app.Application
 import android.content.res.Configuration

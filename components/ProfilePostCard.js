@@ -138,7 +138,7 @@ const ProfilePostCard = ({ post }) => {
       const appName = "SocialZ";
       const appDescription = "Your ultimate student networking platform!";
       const deepLink = `socialz://post/${post.id}`; // Deep link to post detail view
-      const playStoreLink = "https://play.google.com/store/apps/details?id=com.student.app"; // Your actual Android package
+      const playStoreLink = "https://play.google.com/store/apps/details?id=com.vinoothna.mycareerpath"; // Your actual Android package
 
       const username = post.userName || post.user_name || post.username || 'Anonymous';
       
