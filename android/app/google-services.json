@@ -8,28 +8,12 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:1076535842721:android:fc01f85ab32aac67a59de0",
+        "mobilesdk_app_id": "1:1076535842721:android:162311d14b9a4252a59de0",
         "android_client_info": {
-          "package_name": "com.student.app"
+          "package_name": "com.vinoothna.mycareerpath"
         }
       },
       "oauth_client": [
-        {
-          "client_id": "1076535842721-0bklssg4260jnvb96i277m5mhcu8jr2m.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.student.app",
-            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
-          }
-        },
-        {
-          "client_id": "1076535842721-shp5880n5gcrbj48d5gel5r87muk159e.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.student.app",
-            "certificate_hash": "964bfc48e979894339caffcc3592b4d0483e56b4"
-          }
-        },
         {
           "client_id": "1076535842721-f78nis65bj3uon79pg4vajj0rvm1gc99.apps.googleusercontent.com",
           "client_type": 3
@@ -38,6 +22,9 @@
       "api_key": [
         {
           "current_key": "AIzaSyCks9Gqw8WZN2Su_ky0knGC_RU6L0kiK6s"
+        },
+        {
+          "current_key": "AIzaSyDl10pWkQHwYivuBLITOLWbwmceQ8u11cU"
         }
       ],
       "services": {
